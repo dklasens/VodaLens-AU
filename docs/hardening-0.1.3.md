@@ -28,3 +28,9 @@ All agent diffs were reviewed together. Device testing found and fixed a soft si
 The matching-certificate Pixel update preserved cached data. Official-site sign-in, token-free handoff, usage/history/billing, form retention across a real theme transition, saved-thumbnail hiding and a 330-second same-process background/foreground renewal were verified. Normal screenshots remain available by user choice. Vodafone displayed a generic page error during sign-in; the connection and native reads succeeded. The later API-resource classifier correction is regression-tested; causation of that carrier error remains unproven.
 
 No live revocation, deliberate carrier rate-limit/server-failure injection, physical foldable-device test or Docker image build was performed. Failure and revocation behavior was tested with mocks. Multi-day session lifetime remains unknown.
+
+## Clean-session follow-up: 0.1.4
+
+The live disconnect/reconnect investigation exposed a CAPTCHA compatibility regression: the Vodafone-only document policy also blocked required Google CAPTCHA subframes. The hotfix allows only documented HTTPS `/recaptcha/` paths on exact approved hosts inside subframes. Top-level navigation and the credential bridge stay Vodafone-only.
+
+An isolated local diagnostic build recorded only fixed categories and numeric status codes. The test confirmed local erase before a revocation HTTP 200, then normal human sign-in with CAPTCHA allowed, no detected generic portal error, successful token-free handoff and native account/usage/history/billing HTTP 200 responses. Diagnostic instrumentation was removed from the phone afterward and never added to public source. Standard hotfix regression tests total 43; a separate 30-minute idle trial remains unmeasured at publication preparation.

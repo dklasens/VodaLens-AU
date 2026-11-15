@@ -104,14 +104,14 @@ class VodafoneLoginActivity : ComponentActivity() {
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 // Apply to sub-frame navigations as well as the top-level page.
-                val allowed = LoginNavigationPolicy.allowedDocument(request.url.toString()) || (!request.isForMainFrame && request.url.toString() == "about:blank")
+                val allowed = LoginNavigationPolicy.allowedNavigation(request.url.toString(), request.isForMainFrame)
                 if(!allowed && request.isForMainFrame) rejectNavigation(view)
                 return !allowed
             }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 // shouldOverrideUrlLoading does not see form POSTs. Interception runs on a
                 // worker thread; UI changes must be posted, and response bodies stay unread.
-                if(!LoginNavigationPolicy.allowedDocument(request.url.toString()) && LoginNavigationPolicy.documentLike(request.isForMainFrame, request.requestHeaders)) {
+                if(!LoginNavigationPolicy.allowedNavigation(request.url.toString(), request.isForMainFrame) && LoginNavigationPolicy.documentLike(request.isForMainFrame, request.requestHeaders)) {
                     if(request.isForMainFrame) view.post { rejectNavigation(view) }
                     return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked navigation", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
                 }

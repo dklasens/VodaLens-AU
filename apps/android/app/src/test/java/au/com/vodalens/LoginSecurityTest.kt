@@ -10,6 +10,40 @@ class LoginSecurityTest {
         listOf("http://my.vodafone.com.au", "https://my.vodafone.com.au.attacker.example", "https://my.vodafone.com.au@attacker.example", "https://attacker@my.vodafone.com.au", "https://my.vodafone.com.au:8443", "file:///login.html", "javascript:alert(1)", "about:blank", "not a url").forEach { assertFalse(it, LoginNavigationPolicy.allowedDocument(it)) }
         assertFalse(LoginNavigationPolicy.portal("https://authn.vodafone.com.au/login"))
     }
+    @Test fun captchaNamespacesAreSubframesOnlyAndQueriesDoNotChangeScope() {
+        for(host in listOf("www.google.com", "recaptcha.google.com", "www.recaptcha.net")) {
+            val url = "https://$host/recaptcha/api2/anchor?k=test-site&co=encoded-origin%3D"
+            assertTrue(url, LoginNavigationPolicy.allowedFrame(url))
+            assertTrue(url, LoginNavigationPolicy.allowedNavigation(url, false))
+            assertFalse(url, LoginNavigationPolicy.allowedNavigation(url, true))
+            assertFalse(url, LoginNavigationPolicy.allowedDocument(url))
+            assertFalse(url, LoginNavigationPolicy.portal(url))
+        }
+        assertTrue(LoginNavigationPolicy.allowedFrame("https://www.google.com:443/recaptcha/enterprise/bframe"))
+        assertTrue(LoginNavigationPolicy.allowedFrame("about:blank"))
+        assertFalse(LoginNavigationPolicy.allowedNavigation("about:blank", true))
+    }
+    @Test fun captchaFrameExceptionRejectsOtherOriginsAndNamespaces() {
+        listOf(
+            "http://www.google.com/recaptcha/api2/anchor",
+            "https://www.google.com.evil.example/recaptcha/api2/anchor",
+            "https://www.google.com@evil.example/recaptcha/api2/anchor",
+            "https://evil-user@www.google.com/recaptcha/api2/anchor",
+            "https://www.google.com:8443/recaptcha/api2/anchor",
+            "https://google.com/recaptcha/api2/anchor",
+            "https://www.gstatic.com/recaptcha/api2/anchor",
+            "https://www.google.com/search",
+            "https://www.google.com/recaptcha-evil/api2/anchor",
+            "https://www.google.com/recaptcha"
+        ).forEach { assertFalse(it, LoginNavigationPolicy.allowedFrame(it)) }
+    }
+    @Test fun captchaFramePathsCannotTraverseOrUseEncodedAliases() {
+        listOf(
+            "/recaptcha/../search", "/recaptcha/./api2/anchor", "/recaptcha/api2/../../search",
+            "/recaptcha/%2e%2e/search", "/recaptcha/%252e%252e/search", "/recaptcha/api2%2f..%2fsearch",
+            "/recaptcha/api2%5c..%5csearch", "/recaptcha//api2/anchor", "/recaptcha/..;/search"
+        ).forEach { path -> assertFalse(path, LoginNavigationPolicy.allowedFrame("https://www.google.com$path")) }
+    }
     @Test fun mainFrameAndDocumentMetadataTakePrecedenceOverResourceHints() {
         assertTrue(LoginNavigationPolicy.documentLike(true, emptyMap()))
         assertTrue(LoginNavigationPolicy.documentLike(true, mapOf("Accept" to "application/json", "Sec-Fetch-Dest" to "empty")))

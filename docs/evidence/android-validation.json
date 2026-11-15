@@ -1,7 +1,7 @@
 {
   "state": "verified_on_device",
   "privacy": "Public summary only. Account identifiers, usage amounts and record counts, balances, billing dates, precise test timestamps and personal build fingerprints have been removed.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "platform": {
     "native": "Kotlin / Jetpack Compose / Material 3",
     "minimumAndroidApi": 36,
@@ -10,7 +10,7 @@
     "backendRequired": false
   },
   "validation": {
-    "nativeUnitTestsPassed": 40,
+    "nativeUnitTestsPassed": 43,
     "nativeUnitTestsFailed": 0,
     "androidLintErrors": 0,
     "onDeviceEncryptedStorageCheck": "passed",
@@ -23,7 +23,7 @@
     "wrapperValidationAction": "passed in CI",
     "distributionChecksumPinned": true,
     "gitleaksFullHistoryFindings": 0,
-    "finalSourceCi": "https://github.com/dklasens/VodaLens-AU/actions/runs/43683063485"
+    "releaseCi": "Release workflow reruns required validation before publishing the tag"
   },
   "featuresVerified": [
     "Shared-pool deduplication and per-service consumption",
@@ -43,11 +43,12 @@
     "Carrier pagination, retention and billing finality are not independently guaranteed",
     "Precise startup timing was not measured",
     "Device verification used a development-signed personal build; public release uses a separate signing certificate",
-    "Ambiguous 5xx renewal outcomes remain uncertain; definite429 rate limits retain the credential with cooldown",
+    "Ambiguous 5xx renewal outcomes remain uncertain; definite 429 rate limits retain the credential with cooldown",
     "Existing Keystore keys are preserved; unlocked-device-only key policy was considered but not enabled",
     "Physical fold/multi-window behavior was not exercised on foldable hardware; theme-change form retention was verified on the Pixel",
     "Docker image build was not run because Docker is unavailable",
-    "Vodafone showed a generic page error during sign-in; native handoff and direct reads succeeded. Overbroad API POST blocking was corrected afterward; the error cause is not established without a request trace"
+    "Vodafone showed a generic page error during sign-in; native handoff and direct reads succeeded. Overbroad API POST blocking was corrected afterward; the error cause is not established without a request trace",
+    "A clean 30-minute closed-app trial was started for the user; its outcome is not yet known. No multi-day sign-in guarantee is made."
   ],
   "credentialsIncluded": false,
   "personalAccountDataIncluded": false,
@@ -65,7 +66,9 @@
     "sameProcessForegroundRefresh": true,
     "newExpiredTokenRotationObserved": true,
     "refreshTimestampAdvanced": true,
-    "noInteractiveSignInDuringRenewal": true
+    "noInteractiveSignInDuringRenewal": true,
+    "backgroundRenewalVerifiedVersion": "0.1.3-personal",
+    "cleanReconnectVerifiedVersion": "0.1.4-personal-trace followed by normal 0.1.4-personal"
   },
   "hardening": {
     "releaseTagCreationRestrictedToOwner": true,
@@ -82,5 +85,22 @@
     "rememberedUiDerivations": true,
     "debugLogConstructionGuarded": true,
     "bestEffortDisconnectRevocation": "Endpoint verified; local-first behavior tested with mocks; no live revocation issued"
+  },
+  "captchaHotfix": {
+    "regression": "Vodafone-only subframe policy blocked reCAPTCHA during fresh sign-in",
+    "scope": "Exact documented HTTPS reCAPTCHA paths on approved Google hosts, subframes only",
+    "topLevelVodafoneOnly": true,
+    "credentialBridgeNotExpanded": true,
+    "urlSpoofAndTraversalRegressions": true,
+    "cleanDisconnectLocalEraseThenRevocationHttp200": true,
+    "userCompletedFreshSignInNormally": true,
+    "captchaFrameAllowedInPrivateTrace": true,
+    "captchaHttpErrorsAfterFix": false,
+    "genericPortalErrorObservedAfterFix": false,
+    "tokenFreeHandoffCompleted": true,
+    "nativeAccountUsageHistoryAndBillingResponsesHttp200": true,
+    "diagnosticsRemovedFromInstalledBuild": true,
+    "privateTracePublished": false,
+    "sourceReference": "https://developers.google.com/recaptcha/docs/faq"
   }
 }

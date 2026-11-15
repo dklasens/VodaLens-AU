@@ -9,6 +9,16 @@ internal object LoginNavigationPolicy {
         val uri = URI(url)
         uri.scheme.equals("https", true) && uri.host?.lowercase() in hosts && uri.rawUserInfo == null && uri.port in setOf(-1, 443)
     }.getOrDefault(false)
+    // Google's documented reCAPTCHA frame namespace only; never a top-level login origin.
+    private val captchaHosts = setOf("www.google.com", "recaptcha.google.com", "www.recaptcha.net")
+    fun captchaFrame(url: String): Boolean = runCatching {
+        val uri = URI(url)
+        val path = uri.rawPath.orEmpty()
+        uri.scheme.equals("https", true) && uri.host?.lowercase() in captchaHosts && uri.rawUserInfo == null && uri.port in setOf(-1, 443) &&
+            path.startsWith("/recaptcha/") && path == uri.path && '%' !in path && '\\' !in path && ';' !in path && "//" !in path && uri.normalize().rawPath == path
+    }.getOrDefault(false)
+    fun allowedFrame(url: String) = allowedDocument(url) || url == "about:blank" || captchaFrame(url)
+    fun allowedNavigation(url: String, mainFrame: Boolean) = if(mainFrame) allowedDocument(url) else allowedFrame(url)
     fun portal(url: String): Boolean = allowedDocument(url) && runCatching { URI(url).host.equals("my.vodafone.com.au", true) }.getOrDefault(false)
     /**
      * Recognise document navigation without treating API/XHR POSTs as documents.
