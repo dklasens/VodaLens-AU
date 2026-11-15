@@ -6,5 +6,5 @@ if (!process.argv.includes('--arm')) {
   console.log(fs.readFileSync(path.join(__dirname, '../docs/auth/renewal-probe-plan.json'), 'utf8'));
 } else {
   // Execute only after the user explicitly approves the exact experiment.
-  console.log(JSON.stringify(armRenewalResearch(), null, 2));
+  console.log(JSON.stringify(armRenewalResearch({ enabled: process.env.VODALENS_ENABLE_RENEWAL_RESEARCH === 'true' }), null, 2));
 }

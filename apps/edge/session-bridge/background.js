@@ -1,12 +1,14 @@
 'use strict';
 importScripts('backend-client.js');
 let clientPromise, importing = false;
+let researchEnabled = false;
 async function client() {
   if (!clientPromise) clientPromise = (async () => {
     const response = await fetch(chrome.runtime.getURL('local-config.json'));
     if (!response.ok) { const error = new Error(); error.code = 'invalid_configuration'; throw error; }
     const config = await response.json();
     if (config.backendOrigin !== 'http://127.0.0.1:8766') { const error = new Error(); error.code = 'invalid_configuration'; throw error; }
+    researchEnabled = config.renewalResearchEnabled === true;
     return new VodaLensClient({ baseUrl: config.backendOrigin, getSessionToken: () => config.backendToken });
   })().catch(error => { clientPromise = undefined; throw error; });
   return clientPromise;
@@ -28,6 +30,7 @@ function explain(error) {
     session_rejected: 'Vodafone rejected the observed session. Sign in to My Vodafone again, then reconnect.',
     unexpected_api_response: 'Vodafone did not return the expected account data. The session was not saved.',
     wrong_tab: 'Open your My Vodafone tab before choosing Connect this tab.',
+    research_disabled: 'Browser renewal research is disabled. An explicit local research opt-in and rebuild are required.',
     renewal_not_armed: 'The one-time renewal experiment is not armed. It requires explicit approval and preparation first.',
     renewal_stale_page: 'Refresh My Vodafone normally, then retry the experiment while its access token is fresh.',
     renewal_cache_unavailable: 'The expected Vodafone refresh credential is unavailable or changed. No renewal request was sent.',
@@ -55,6 +58,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       return { ok: true };
     }
     if (!extensionPage) return;
+    if (['researchStatus', 'testBackendRenewal'].includes(message.type)) {
+      await client();
+      if (!researchEnabled) { const error = new Error(); error.code = 'research_disabled'; throw error; }
+    }
     if (message.type === 'researchStatus') return (await client()).request('/v1/research/vodafone/renewal-probe');
     if (message.type === 'testBackendRenewal') {
       if (importing) { const error = new Error(); error.code = 'renewal_interrupted'; throw error; }

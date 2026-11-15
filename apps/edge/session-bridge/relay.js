@@ -2,9 +2,12 @@
 (() => {
   'use strict';
   if (location.origin !== 'https://my.vodafone.com.au') return;
+  // Build-time opt-in only; the ordinary bridge never exports refresh credentials.
+  const RESEARCH_ENABLED = false;
   let pendingResearch = null;
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== chrome.runtime.id || sender.tab || (sender.url && !sender.url.startsWith(chrome.runtime.getURL(''))) || !['prepareRenewalResearch', 'retireRenewalCredential', 'cancelRenewalResearch'].includes(message.type)) return;
+    if (!RESEARCH_ENABLED) { respond({ errorCode: 'research_disabled' }); return; }
     try {
       if (window !== window.top) throw new Error();
       if (message.type === 'cancelRenewalResearch') { pendingResearch = null; respond({ ok: true }); return; }

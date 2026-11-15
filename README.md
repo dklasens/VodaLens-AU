@@ -58,4 +58,8 @@ Use JDK 17 or later and Android SDK 37. Debug builds use a local development sig
 
 The optional desktop research backend requires Node.js 26+. Run `npm run setup:local`, `npm run bridge:build`, then `npm start`. This generates private local configuration; **do not share the generated extension folder**. The Android app does not use that configuration. Shared tests run with `npm test` and `npm run check`.
 
+The code is available under the [MIT licence](LICENSE). See [SECURITY.md](SECURITY.md) for private vulnerability reporting and credential-handling boundaries. Browser renewal research defaults off and needs explicit local opt-in plus separate one-time arming; it is not required by the Android app.
+
 Before publishing changes, run `python3 scripts/check-publication.py`. Keep `.env`, databases, captures, generated output and signing keys out of commits. The publication check catches common credential formats and forbidden paths; it is an additional check, not a guarantee against every kind of sensitive data.
+
+CI also validates the Gradle wrapper and pinned distribution, runs the scanner regression tests, and scans full Git history with Gitleaks before signing. To repeat the history scan with Gitleaks 8.30.1 installed, run `gitleaks git --redact --no-banner --log-opts=--all .`. Opaque credentials cannot all be detected by shape; never rely on a scanner as the only publication check.

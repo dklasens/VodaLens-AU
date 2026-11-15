@@ -21,8 +21,14 @@ const destination = path.join(root, 'output/edge-session-bridge');
 fs.mkdirSync(destination, { recursive: true, mode: 0o700 });
 fs.chmodSync(destination, 0o700);
 fs.cpSync(source, destination, { recursive: true });
+if (config.renewalResearchEnabled) {
+  const relay = path.join(destination, 'relay.js');
+  fs.writeFileSync(relay, fs.readFileSync(relay, 'utf8').replace('const RESEARCH_ENABLED = false;', 'const RESEARCH_ENABLED = true;'));
+  const popup = path.join(destination, 'popup.html');
+  fs.writeFileSync(popup, fs.readFileSync(popup, 'utf8').replace('<details id="renewalResearch" hidden>', '<details id="renewalResearch">'));
+}
 fs.copyFileSync(path.join(root, 'packages/backend-client/src/index.cjs'), path.join(destination, 'backend-client.js'));
-fs.writeFileSync(path.join(destination, 'local-config.json'), JSON.stringify({ backendOrigin: config.publicOrigin, backendToken: config.apiToken }), { mode: 0o600 });
+fs.writeFileSync(path.join(destination, 'local-config.json'), JSON.stringify({ backendOrigin: config.publicOrigin, backendToken: config.apiToken, renewalResearchEnabled: config.renewalResearchEnabled }), { mode: 0o600 });
 fs.chmodSync(path.join(destination, 'local-config.json'), 0o600);
 console.log(`Personal bridge built in output/edge-session-bridge. Extension ID: ${id}.`);
 console.log('This ignored build contains your local backend credential. Restart the backend after its exact extension origin has been added to .env.');

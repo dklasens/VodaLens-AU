@@ -37,13 +37,18 @@ class VodafoneLoginActivity : ComponentActivity() {
     private var webDestroyed = false
     private var profileName: String? = null
     private var sessionReady = false
-    private var retryMode = false
+    private val recovery = LoginRecoveryGate()
+    private var documentLoading = true
+    private var interactiveForm = false
     private val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private var refreshInFlight: String? = null
+    private val handoff = LoginHandoffGate()
+    private var activeTransaction: String? = null
+    private var actionSequence = 0L
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setRecentsScreenshotEnabled(false)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
@@ -76,8 +81,12 @@ class VodafoneLoginActivity : ComponentActivity() {
         explanation = TextView(this).apply { text = "Sign in on Vodafone’s page. Your password and verification code stay with Vodafone."; textSize = 13f; setTextColor(Color.DKGRAY) }
         footer.addView(explanation)
         connect = Button(this).apply { text = "Use this Vodafone account"; isAllCaps = false; isEnabled = false; setOnClickListener {
-            if(retryMode) { recreate(); return@setOnClickListener }
-            busy = true; isEnabled = false; text = "Connecting securely…"; web.evaluateJavascript("window.__lensTake && window.__lensTake()", null)
+            if(recovery.restartRequired) { recreate(); return@setOnClickListener }
+            if(!LoginNavigationPolicy.portal(web.url.orEmpty())) { showError("Return to My Vodafone before connecting."); return@setOnClickListener }
+            busy = true; handoff.request(); isEnabled = false; text = "Connecting securely…"
+            val action = ++actionSequence
+            web.evaluateJavascript("window.__lensTake && window.__lensTake()", null)
+            timeoutHandler.postDelayed({ if(busy && !retired && actionSequence == action) showError("The connection did not finish. Restart sign-in to try again.") }, 15_000)
         } }
         footer.addView(connect, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
         root.addView(footer)
@@ -91,18 +100,33 @@ class VodafoneLoginActivity : ComponentActivity() {
             safeBrowsingEnabled = true; setSupportMultipleWindows(false)
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
-        web.webChromeClient = object : WebChromeClient() { override fun onProgressChanged(view: WebView?, value: Int) { progress.progress = value; progress.visibility = if(value >= 100) View.GONE else View.VISIBLE } }
+        web.webChromeClient = object : WebChromeClient() { override fun onProgressChanged(view: WebView?, value: Int) { documentLoading = value < 100; progress.progress = value; progress.visibility = if(value >= 100) View.GONE else View.VISIBLE } }
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                if (!request.isForMainFrame) return false
-                val url = request.url
-                val allowed = url.scheme == "https" && url.host in setOf("my.vodafone.com.au", "authn.vodafone.com.au") && (url.port == -1 || url.port == 443)
-                if(!allowed) showError("This link opens outside Vodafone sign-in. Return to the sign-in page to continue.")
+                // Apply to sub-frame navigations as well as the top-level page.
+                val allowed = LoginNavigationPolicy.allowedDocument(request.url.toString()) || (!request.isForMainFrame && request.url.toString() == "about:blank")
+                if(!allowed && request.isForMainFrame) rejectNavigation(view)
                 return !allowed
             }
-            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { domain.text = Uri.parse(url.orEmpty()).host ?: "Vodafone"; connect.isEnabled = false }
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                // shouldOverrideUrlLoading does not see form POSTs. Interception runs on a
+                // worker thread; UI changes must be posted, and response bodies stay unread.
+                if(!LoginNavigationPolicy.allowedDocument(request.url.toString()) && LoginNavigationPolicy.documentLike(request.isForMainFrame, request.method, request.requestHeaders)) {
+                    if(request.isForMainFrame) view.post { rejectNavigation(view) }
+                    return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked navigation", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
+                }
+                return null
+            }
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                if(url == "about:blank" && (retired || isFinishing)) return
+                handoff.navigate(); sessionReady = false; documentLoading = true; interactiveForm = false; connect.isEnabled = false
+                activeTransaction?.let(::discardPending); activeTransaction = null; staged = false
+                if(!LoginNavigationPolicy.allowedDocument(url.orEmpty())) { rejectNavigation(view); return }
+                domain.text = Uri.parse(url.orEmpty()).host ?: "Vodafone"
+                if(busy) showError("Vodafone navigated during connection. Please restart sign-in.")
+            }
             override fun onPageCommitVisible(view: WebView, url: String?) { if(isVodafoneOrigin(Uri.parse(url.orEmpty()))) view.evaluateJavascript(LOGIN_OBSERVER, null) }
-            override fun onPageFinished(view: WebView, url: String?) { if(isVodafoneOrigin(Uri.parse(url.orEmpty()))) view.evaluateJavascript(LOGIN_OBSERVER, null) }
+            override fun onPageFinished(view: WebView, url: String?) { documentLoading = false; if(isVodafoneOrigin(Uri.parse(url.orEmpty()))) view.evaluateJavascript(LOGIN_OBSERVER, null) }
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler, sslError: SslError?) { handler.cancel(); showError("Vodafone’s secure connection could not be verified.") }
             override fun onReceivedError(view: WebView?, request: WebResourceRequest, failure: WebResourceError?) { if(request.isForMainFrame) showError("Couldn’t load Vodafone sign-in. Check your connection and try again.") }
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -114,45 +138,66 @@ class VodafoneLoginActivity : ComponentActivity() {
             }
         }
         if(!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) { showError("Update Android System WebView to connect securely."); return }
-        WebViewCompat.addWebMessageListener(web, "VodaLensBridge", setOf(VODAFONE_ORIGIN)) { view, message, origin, mainFrame, _ ->
+        WebViewCompat.addWebMessageListener(web, "VodaLensBridge", setOf(VODAFONE_ORIGIN)) { view, message, origin, mainFrame, reply ->
             if(!mainFrame || !isVodafoneOrigin(origin) || !isVodafoneOrigin(Uri.parse(view.url.orEmpty()))) return@addWebMessageListener
             val raw = message.data ?: return@addWebMessageListener
             if(raw.length > 40_000) return@addWebMessageListener
             val packet = runCatching { JSONObject(raw) }.getOrNull() ?: return@addWebMessageListener
             when(packet.text("type")) {
                 "ready" -> if(!busy) {
-                    sessionReady = packet.optBoolean("ready")
-                    if(sessionReady) { retryMode = false; connect.text = "Use this Vodafone account"; explanation.text = "Your Vodafone account is ready to connect." }
-                    connect.isEnabled = sessionReady || retryMode
+                    interactiveForm = packet.optBoolean("interactive")
+                    val ready = packet.optBoolean("ready")
+                    if(recovery.acceptReady(ready)) {
+                        sessionReady = ready
+                        if(sessionReady) { connect.text = "Use this Vodafone account"; explanation.text = "Your Vodafone account is ready to connect." }
+                        connect.isEnabled = sessionReady || recovery.restartRequired
+                    }
                 }
                 "credential" -> {
-                    if(!busy || refreshInFlight != null) return@addWebMessageListener
+                    if(!busy || activeTransaction != null) return@addWebMessageListener
+                    val transaction = packet.text("transaction")
+                    val generation = handoff.accept(transaction) ?: return@addWebMessageListener
                     val access = packet.text("access"); val refresh = packet.text("refresh"); val key = packet.text("key")
                     val expiry = runCatching { JSONObject(String(android.util.Base64.decode(access.split('.')[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING))).getLong("exp") * 1000 }.getOrNull()
                     if(!key.startsWith(CACHE_PREFIX) || access.length !in 20..20_000 || refresh.length !in 16..8192 || access.any(Char::isWhitespace) || refresh.any(Char::isWhitespace) || expiry == null || expiry < System.currentTimeMillis()+10_000 || expiry > System.currentTimeMillis()+86_400_000) { showError("Finish Vodafone sign-in, then try connecting again."); return@addWebMessageListener }
-                    refreshInFlight = refresh
+                    activeTransaction = transaction
                     scope.launch {
                         try {
-                            withContext(Dispatchers.IO) { store.write("pending-connection", JSONObject().put("access", access).put("refresh", refresh).put("expiresAt", expiry)) }
+                            withContext(Dispatchers.IO) { store.write("pending-connection", JSONObject().put("access", access).put("refresh", refresh).put("expiresAt", expiry).put("handoff", transaction)) }
+                            if(isFinishing || webDestroyed || !handoff.current(transaction, generation) || !LoginNavigationPolicy.portal(web.url.orEmpty())) {
+                                discardPending(transaction); return@launch
+                            }
                             staged = true
-                            web.evaluateJavascript("""(()=>{try{const k=${JSONObject.quote(key)},r=${JSONObject.quote(refresh)};const v=JSON.parse(localStorage.getItem(k));if(v?.body?.refresh_token!==r){VodaLensBridge.postMessage(JSON.stringify({type:'changed'}));return;}localStorage.removeItem(k);VodaLensBridge.postMessage(JSON.stringify({type:'retired'}));window.stop();}catch(e){VodaLensBridge.postMessage(JSON.stringify({type:'changed'}));}})()""", null)
-                        } catch (_: Exception) { refreshInFlight = null; showError("Couldn’t save the connection securely on this phone.") }
+                            // Reply only to the originating JS object. Never interpolate a credential
+                            // into evaluateJavascript, even if navigation occurs during the disk write.
+                            reply.postMessage(JSONObject().put("type", "commit").put("transaction", transaction).toString())
+                        } catch (_: Exception) {
+                            discardPending(transaction)
+                            if(handoff.current(transaction, generation)) { activeTransaction = null; handoff.cancel(); showError("Couldn’t save the connection securely on this phone.") }
+                        } finally {
+                            if(!retired && (!handoff.current(transaction, generation) || isFinishing || webDestroyed)) {
+                                withContext(NonCancellable + Dispatchers.IO) { discardPendingNow(transaction) }
+                            }
+                        }
                     }
                 }
-                "retired" -> if(busy && staged && refreshInFlight != null) {
-                    retired = true; refreshInFlight = null
+                "retired" -> if(busy && staged && handoff.current(packet.text("transaction"))) {
+                    retired = true; activeTransaction = null; handoff.cancel()
                     web.stopLoading(); web.loadUrl("about:blank")
                     if(profileName == null) CookieManager.getInstance().removeAllCookies(null)
                     setResult(Activity.RESULT_OK); finish()
                 }
                 "changed" -> {
-                    refreshInFlight = null
-                    scope.launch { withContext(Dispatchers.IO) { store.delete("pending-connection") }; staged = false }
+                    if(!handoff.current(packet.text("transaction"))) return@addWebMessageListener
+                    activeTransaction?.let(::discardPending); activeTransaction = null; handoff.cancel(); staged = false
                     showError("Vodafone renewed during connection. Please try once more.")
                 }
             }
         }
-        if(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) WebViewCompat.addDocumentStartJavaScript(web, LOGIN_OBSERVER, setOf(VODAFONE_ORIGIN))
+        if(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(web, LOGIN_NAVIGATION_GUARD, setOf(VODAFONE_ORIGIN, "https://authn.vodafone.com.au"))
+            WebViewCompat.addDocumentStartJavaScript(web, LOGIN_OBSERVER, setOf(VODAFONE_ORIGIN))
+        }
         if(profileName != null) web.loadUrl(VODAFONE_ORIGIN)
         else {
             WebStorage.getInstance().deleteOrigin(VODAFONE_ORIGIN)
@@ -160,13 +205,35 @@ class VodafoneLoginActivity : ComponentActivity() {
             web.clearCache(true)
             CookieManager.getInstance().removeAllCookies { if(!isFinishing) web.loadUrl(VODAFONE_ORIGIN) }
         }
-        timeoutHandler.postDelayed({ if(!isFinishing && !sessionReady && !busy) showError("Vodafone is taking longer than expected. You can restart sign-in if its page stays stuck.") }, 30_000)
+        timeoutHandler.postDelayed({
+            val authPage = Uri.parse(web.url.orEmpty()).host == "authn.vodafone.com.au"
+            if(!isFinishing && recovery.shouldOfferDelay(authPage, documentLoading, interactiveForm, sessionReady, busy)) {
+                showError("Vodafone’s page is taking longer than expected. You can wait or restart sign-in.", pageDelay = true)
+            }
+        }, 30_000)
+    }
+    private fun rejectNavigation(view: WebView) {
+        if(isFinishing || webDestroyed) return
+        view.stopLoading(); handoff.navigate(); sessionReady = false
+        activeTransaction?.let(::discardPending); activeTransaction = null; staged = false
+        showError("This page is outside Vodafone sign-in. Restart sign-in to continue.")
+    }
+    private fun discardPending(transaction: String) {
+        scope.launch(Dispatchers.IO) { discardPendingNow(transaction) }
+    }
+    private fun discardPendingNow(transaction: String) {
+        synchronized(store) {
+            if(store.read("pending-connection")?.text("handoff") == transaction) store.delete("pending-connection")
+        }
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun showError(message: String) { explanation.text = message; busy = false; retryMode = true; connect.isEnabled = true; connect.text = "Restart sign-in" }
+    private fun showError(message: String, pageDelay: Boolean = false) {
+        activeTransaction?.let(::discardPending); activeTransaction = null; handoff.cancel(); staged = false
+        explanation.text = message; busy = false; recovery.fail(pageDelay); connect.isEnabled = true; connect.text = "Restart sign-in"
+    }
     override fun onDestroy() {
-        if(!retired && staged) runCatching { store.delete("pending-connection") }
-        refreshInFlight = null; scope.cancel()
+        if(!retired) activeTransaction?.let { runCatching { discardPendingNow(it) } }
+        activeTransaction = null; handoff.cancel(); scope.cancel()
         timeoutHandler.removeCallbacksAndMessages(null)
         if(::web.isInitialized && !webDestroyed) {
             web.stopLoading()
@@ -177,7 +244,7 @@ class VodafoneLoginActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
-private fun isVodafoneOrigin(uri: Uri) = uri.scheme == "https" && uri.host == "my.vodafone.com.au" && (uri.port == -1 || uri.port == 443)
+private fun isVodafoneOrigin(uri: Uri) = LoginNavigationPolicy.portal(uri.toString())
 private const val CACHE_PREFIX = "@@auth0spajs@@::TE6munQ7o6txJRqZeSzLBzDECX1yVBJO::https://dsapi.vodafone.com.au::"
 private val LOGIN_OBSERVER = """
 (()=>{
@@ -185,7 +252,39 @@ private val LOGIN_OBSERVER = """
  window.__lensObserver=true;
  const prefix='$CACHE_PREFIX';
  function entry(){const keys=Object.keys(localStorage).filter(k=>k.startsWith(prefix));if(keys.length!==1)return null;try{const value=JSON.parse(localStorage.getItem(keys[0]));const b=value&&value.body;if(!b||!b.access_token||!b.refresh_token)return null;return {key:keys[0],body:b};}catch(e){return null;}}
- const timer=setInterval(()=>{VodaLensBridge.postMessage(JSON.stringify({type:'ready',ready:!!entry()}));},1200);
- window.__lensTake=()=>{const e=entry();if(!e){VodaLensBridge.postMessage(JSON.stringify({type:'changed'}));return;}VodaLensBridge.postMessage(JSON.stringify({type:'credential',key:e.key,access:e.body.access_token,refresh:e.body.refresh_token}));};
+ let pending=null;
+ const timer=setInterval(()=>{const interactive=Array.from(document.querySelectorAll('input,select,textarea')).some(e=>e.type!=='hidden'&&e.getClientRects().length>0);VodaLensBridge.postMessage(JSON.stringify({type:'ready',ready:!!entry(),interactive}));},1200);
+ VodaLensBridge.onmessage=event=>{
+   try {
+     const message=JSON.parse(event.data);
+     if(message.type!=='commit'||!pending||message.transaction!==pending.transaction)return;
+     const saved=pending; pending=null;
+     const current=entry();
+     if(!current||current.key!==saved.key||current.body.refresh_token!==saved.refresh){VodaLensBridge.postMessage(JSON.stringify({type:'changed',transaction:saved.transaction}));return;}
+     localStorage.removeItem(saved.key); clearInterval(timer);
+     VodaLensBridge.postMessage(JSON.stringify({type:'retired',transaction:saved.transaction}));window.stop();
+   } catch(e) { if(pending){const transaction=pending.transaction;pending=null;VodaLensBridge.postMessage(JSON.stringify({type:'changed',transaction}));} }
+ };
+ window.__lensTake=()=>{
+   if(pending)return;
+   const e=entry();if(!e){VodaLensBridge.postMessage(JSON.stringify({type:'ready',ready:false}));return;}
+   const transaction=crypto.randomUUID(); pending={key:e.key,refresh:e.body.refresh_token,transaction};
+   VodaLensBridge.postMessage(JSON.stringify({type:'credential',transaction,key:e.key,access:e.body.access_token,refresh:e.body.refresh_token}));
+ };
+})()
+""".trimIndent()
+
+// Capture normal and programmatic form submission before a POST can leave the
+// allowed document origins. Native checks remain authoritative for main frames.
+private val LOGIN_NAVIGATION_GUARD = """
+(()=>{
+ if(window.__lensNavigationGuard)return; window.__lensNavigationGuard=true;
+ const allowed=value=>{try{const u=new URL(value,location.href);return u.protocol==='https:'&&!u.username&&!u.password&&(!u.port||u.port==='443')&&['my.vodafone.com.au','authn.vodafone.com.au'].includes(u.hostname);}catch(e){return false;}};
+ const action=(form,button)=>button?.hasAttribute('formaction')?button.formAction:(form.action||location.href);
+ document.addEventListener('submit',event=>{if(!allowed(action(event.target,event.submitter))){event.preventDefault();event.stopImmediatePropagation();}},true);
+ const submit=HTMLFormElement.prototype.submit;
+ HTMLFormElement.prototype.submit=function(){if(allowed(action(this)))return submit.apply(this,arguments);};
+ const requestSubmit=HTMLFormElement.prototype.requestSubmit;
+ if(requestSubmit)HTMLFormElement.prototype.requestSubmit=function(button){if(allowed(action(this,button)))return requestSubmit.apply(this,arguments);};
 })()
 """.trimIndent()

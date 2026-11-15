@@ -7,12 +7,13 @@ const { hasAccountData } = require('./account.cjs');
 const { AuthError } = require('./oauth.cjs');
 const ROOT = path.resolve(__dirname, '../../..');
 const DIRECTORY = path.join(ROOT, 'local-data/renewal-research');
-const EVIDENCE = path.join(ROOT, 'docs/evidence/renewal-backend-probe.json');
+const EVIDENCE = path.join(DIRECTORY, 'evidence.json');
 const CLIENT_ID = 'TE6munQ7o6txJRqZeSzLBzDECX1yVBJO';
 const TOKEN_URL = 'https://authn.vodafone.com.au/oauth/token';
 const REDIRECT_URI = 'https://my.vodafone.com.au';
 const terminal = state => ['complete', 'failed', 'aborted'].includes(state);
-function armRenewalResearch({ directory = DIRECTORY, clock = Date.now } = {}) {
+function armRenewalResearch({ enabled = false, directory = DIRECTORY, clock = Date.now } = {}) {
+  if (enabled !== true) throw new Error('Renewal research is disabled. Explicitly opt in before arming an experiment.');
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   fs.chmodSync(directory, 0o700);
   if (['arm.json', 'arm-used.json', 'state.json', 'vault.json'].some(file => fs.existsSync(path.join(directory, file)))) throw new Error('A renewal experiment is already recorded. Review it before authorizing another.');
@@ -27,7 +28,7 @@ class RenewalResearch {
   }
   file(name) { return path.join(this.directory, name + '.json'); }
   read(name) { return fs.existsSync(this.file(name)) ? JSON.parse(fs.readFileSync(this.file(name), 'utf8')) : null; }
-  enabled() { return this.config.publicOrigin === 'http://127.0.0.1:8766' && this.config.authMethod === 'myvodafone-session'; }
+  enabled() { return this.config.renewalResearchEnabled === true && ['127.0.0.1', '::1', 'localhost'].includes(this.config.host || '127.0.0.1') && this.config.publicOrigin === 'http://127.0.0.1:8766' && this.config.authMethod === 'myvodafone-session'; }
   status() {
     if (!this.enabled()) return { armed: false, state: 'disabled', running: false };
     const arm = this.read('arm');
@@ -62,12 +63,14 @@ class RenewalResearch {
     return this.status();
   }
   abort(probeId) {
+    if (!this.enabled()) throw new AuthError('research_disabled', 'Renewal research is disabled.', 404);
     if (!this.current || this.current.probeId !== probeId || this.current.state !== 'awaiting_browser_release') throw new AuthError('renewal_interrupted', 'This experiment cannot be cancelled automatically.', 409);
     fs.rmSync(this.file('vault'), { force: true });
     this.record({ state: 'aborted' });
     return this.status();
   }
   commit(input) {
+    if (!this.enabled()) throw new AuthError('research_disabled', 'Renewal research is disabled.', 404);
     if (!this.current || this.current.probeId !== input.probeId || this.current.state !== 'awaiting_browser_release' || this.current.commitDeadlineAt <= this.clock() || input.browserReleased !== true) throw new AuthError('renewal_interrupted', 'The browser must release its credential promptly before the experiment can begin.', 409);
     this.running = true;
     this.record({ browserCredentialRetired: true, state: 'waiting_for_expiry', nextActionAt: this.vault().accessTokenExpiresAt + 1000 });

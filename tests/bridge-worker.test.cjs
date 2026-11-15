@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const script = fs.readFileSync(path.join(__dirname, '../apps/edge/session-bridge/background.js'), 'utf8');
-function worker({ failureCode, failureMessage = 'private-error-marker', sessionState = 'sign_in_required', researchArmed = false, retireSuccess = true } = {}) {
+function worker({ failureCode, failureMessage = 'private-error-marker', sessionState = 'sign_in_required', researchArmed = false, researchEnabled = true, retireSuccess = true } = {}) {
   let listener; const data = {}, calls = [];
   class Client {
     constructor(config) { assert.equal(config.getSessionToken(), 'private-backend-credential'); }
@@ -20,7 +20,7 @@ function worker({ failureCode, failureMessage = 'private-error-marker', sessionS
   const page = { id: 'trusted-extension', url: 'https://my.vodafone.com.au/', frameId: 0, tab: { id: 7 } };
   const context = vm.createContext({
     URL, Date, importScripts() {}, VodaLensClient: Client,
-    fetch: async () => ({ ok: true, json: async () => ({ backendOrigin: 'http://127.0.0.1:8766', backendToken: 'private-backend-credential' }) }),
+    fetch: async () => ({ ok: true, json: async () => ({ backendOrigin: 'http://127.0.0.1:8766', backendToken: 'private-backend-credential', renewalResearchEnabled: researchEnabled }) }),
     chrome: {
       runtime: { id: 'trusted-extension', getURL: file => `chrome-extension://trusted-extension/${file}`, onMessage: { addListener: fn => { listener = fn; } } },
       storage: { session: { get: async () => data, set: async value => Object.assign(data, value) } },
@@ -95,4 +95,11 @@ test('research aborts without committing if the browser cache changed before ret
   assert.ok(result.error);
   assert.equal(calls.some(call => call.researchRoute?.endsWith('/commit')), false);
   assert.equal(calls.some(call => call.researchRoute?.endsWith('/abort')), true);
+});
+
+test('disabled research never queries the backend arm or the browser credential relay', async () => {
+  const { message, calls } = worker({ researchEnabled: false, researchArmed: true });
+  const result = await message({ type: 'testBackendRenewal' });
+  assert.match(result.error, /research is disabled/);
+  assert.equal(calls.some(call => call.researchRelay || call.researchRoute), false);
 });

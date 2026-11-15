@@ -1,6 +1,7 @@
 package au.com.vodalens
 
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -10,6 +11,7 @@ import java.util.UUID
 
 const val VODAFONE_CLIENT = "TE6munQ7o6txJRqZeSzLBzDECX1yVBJO"
 const val VODAFONE_ORIGIN = "https://my.vodafone.com.au"
+const val REVOCATION_ENDPOINT = "https://authn.vodafone.com.au/oauth/revoke"
 const val TOKEN_ENDPOINT = "https://authn.vodafone.com.au/oauth/token"
 const val PLANS_PATH = "/tpg-api/customerManagement/v1/customer/planDetails"
 const val CONSUMPTION_PATH = "/tmf-api/usageConsumption/v4/queryUsageConsumption"
@@ -17,7 +19,7 @@ const val HISTORY_PATH = "/tmf-api/usageManagement/v4/usage"
 const val BILL_PATH = "/tmf-api/customerBillManagement/v4/customerBill"
 
 internal data class HttpResult(val status: Int, val body: String, val partial: Boolean)
-class VodafoneApi(private val store: SecureStore, online: () -> Boolean = { true }) {
+class VodafoneApi(private val store: SecureStore, private val debugLogging: Boolean = false, online: () -> Boolean = { true }) {
     companion object { private val processRenewalGate = Mutex() }
     private val renewal = SessionRenewal(
         load = store::credentials,
@@ -31,7 +33,9 @@ class VodafoneApi(private val store: SecureStore, online: () -> Boolean = { true
                 val description = failure?.text("error_description").orEmpty().lowercase()
                 val category = when { "reuse" in description || "already used" in description -> "reuse_detected"; "expired" in description -> "expired"; "revoked" in description -> "revoked"; else -> "grant_rejected" }
                 android.util.Log.w("VodaLensSession", "Renewal rejected: http=${response.status}; code=$code; category=$category")
-                throw VodafoneFailure(401, "Vodafone needs you to sign in again.")
+                if(response.status == 429) throw RenewalRateLimited()
+                if(response.status in 500..599) throw VodafoneFailure(401, "Vodafone could not confirm renewal. Your saved data remains available; reconnect to renew safely.")
+                throw VodafoneFailure(401, if(code == "invalid_grant") "Vodafone rejected this connection. Please sign in again." else "Vodafone needs you to sign in again.")
             }
             val json = JSONObject(response.body)
             RenewalResponse(json.text("access_token"), json.text("refresh_token"), json.optLong("expires_in"), json.text("token_type"))
@@ -83,7 +87,18 @@ class VodafoneApi(private val store: SecureStore, online: () -> Boolean = { true
     suspend fun bills(account: String, current: Boolean): List<Bill> {
         require(Regex("[A-Za-z0-9_-]+").matches(account))
         val json = JSONObject(read("$BILL_PATH/$account", mapOf("bill" to if(current) "current" else "previous"), "v4").body)
-        android.util.Log.i("VodaLensData", "Billing schema: period=${if(current) "current" else "previous"}; rows=${json.array("customerBill").size}; keys=${json.keys().asSequence().toList()}; rowKeys=${json.array("customerBill").firstOrNull()?.keys()?.asSequence()?.toList()}")
+        if(debugLogging) android.util.Log.i("VodaLensData", "Billing schema: period=${if(current) "current" else "previous"}; rows=${json.array("customerBill").size}; keys=${json.keys().asSequence().toList()}; rowKeys=${json.array("customerBill").firstOrNull()?.keys()?.asSequence()?.toList()}")
         return VodafoneParser.bills(json, current)
     }
+    /** Local deletion is unconditional; remote revocation is a bounded best effort.
+     * Discovery advertises this endpoint. The issuer may revoke other sessions
+     * belonging to the same web-client grant; the confirmation UI explains that.
+     */
+    suspend fun disconnect(): Boolean = processRenewalGate.withLock {
+        removeConnection(store::credentials, store::clear) { refresh ->
+            val form = mapOf("client_id" to VODAFONE_CLIENT, "token" to refresh, "token_type_hint" to "refresh_token").entries.joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, "UTF-8")}" }
+            request(REVOCATION_ENDPOINT, "POST", form = form).status == 200
+        }
+    }
+
 }

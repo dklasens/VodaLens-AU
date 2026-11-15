@@ -57,7 +57,7 @@ function createApplication({ config, store, auth, research = null, clock = Date.
       if (!authenticated(req.headers.authorization, config.apiToken)) throw new AuthError('unauthorized', 'A VodaLens backend session token is required.', 401);
       const owner = config.ownerId;
       if (url.pathname.startsWith('/v1/research/vodafone/renewal-probe')) {
-        if (!research) throw new AuthError('research_disabled', 'Renewal research is unavailable.', 404);
+        if (config.renewalResearchEnabled !== true || !research || !research.enabled()) throw new AuthError('research_disabled', 'Renewal research is unavailable.', 404);
         if (req.method === 'GET' && url.pathname === '/v1/research/vodafone/renewal-probe') return send(res, 200, research.status(), cors);
         if (req.method === 'POST' && url.pathname === '/v1/research/vodafone/renewal-probe/stage') return send(res, 200, research.stage(await readJson(req)), cors);
         if (req.method === 'POST' && url.pathname === '/v1/research/vodafone/renewal-probe/commit') return send(res, 202, research.commit(await readJson(req)), cors);

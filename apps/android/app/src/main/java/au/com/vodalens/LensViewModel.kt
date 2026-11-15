@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -19,7 +22,9 @@ import java.time.LocalDate
 
 class LensViewModel(application: Application) : AndroidViewModel(application) {
     private val store = SecureStore(application)
-    private val api = VodafoneApi(store) {
+    private val debugLogging = application.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    private val networkGate = Semaphore(4)
+    private val api = VodafoneApi(store, debugLogging = debugLogging) {
         val manager = application.getSystemService(android.net.ConnectivityManager::class.java)
         manager.getNetworkCapabilities(manager.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
     }
@@ -75,25 +80,40 @@ class LensViewModel(application: Application) : AndroidViewModel(application) {
                         if(sameServiceAccount(previous.services, services)) mutableState.update { it.copy(account = previous, histories = histories) }
                         reconnectCache = null
                     }
-                    val consumptions = services.map { api.consumption(it.number) }
-                    android.util.Log.i("VodaLensData", "Consumption schema: " + consumptions.map { response -> response.array("usageConsumption").flatMap { it.array("bucketRefOrValue") }.map { bucket -> org.json.JSONObject().put("type", bucket.text("usageType")).put("counterTypes", org.json.JSONArray(bucket.array("bucketCounter").map { it.text("counterType") })).put("units", org.json.JSONArray(bucket.array("bucketCounter").map { it.optJSONObject("value")?.text("units") })).put("hasDates", bucket.optJSONObject("validFor") != null) } })
+                    val accounts = services.map { it.accountId }.filter { it.isNotBlank() }.distinct()
+                    val (consumptions, billingResult) = supervisorScope {
+                        val usage = async { services.parallelReads(networkGate) { api.consumption(it.number) } }
+                        val billing = async {
+                            try {
+                                check(accounts.isNotEmpty()) { "Missing billing account" }
+                                val reads = accounts.flatMap { listOf(it to true, it to false) }.parallelReads(networkGate) { (account, current) -> api.bills(account, current) }
+                                Result.success(accounts.indices.flatMap { index -> mergeBillingHistory(reads[index * 2], reads[index * 2 + 1]) })
+                            } catch (error: CancellationException) { throw error }
+                            catch (error: Exception) { Result.failure<List<Bill>>(error) }
+                        }
+                        usage.await() to billing.await()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if(debugLogging) android.util.Log.i("VodaLensData", "Consumption schema: " + consumptions.map { response -> response.array("usageConsumption").flatMap { it.array("bucketRefOrValue") }.map { bucket -> org.json.JSONObject().put("type", bucket.text("usageType")).put("counterTypes", org.json.JSONArray(bucket.array("bucketCounter").map { it.text("counterType") })).put("units", org.json.JSONArray(bucket.array("bucketCounter").map { it.optJSONObject("value")?.text("units") })).put("hasDates", bucket.optJSONObject("validFor") != null) } })
                     val pools = VodafoneParser.pools(consumptions)
                     var bills = state.value.account?.bills.orEmpty()
                     var billsUpdatedAt = state.value.account?.billsUpdatedAt ?: 0L
                     var billingError: String? = null
-                    val accounts = services.map { it.accountId }.filter { it.isNotBlank() }.distinct()
-                    if (accounts.isEmpty()) billingError = "Vodafone did not return a billing account for these services."
-                    else try {
-                        bills = accounts.flatMap { account -> mergeBillingHistory(api.bills(account, true), api.bills(account, false)) }.distinctBy { it.id }.filter { it.isCurrent || (it.issued ?: LocalDate.now()) >= LocalDate.now().minusMonths(6) }.sortedByDescending { it.issued }
+                    billingResult.fold(onSuccess = { returned ->
+                        bills = returned.distinctBy { it.id }.filter { it.isCurrent || (it.issued ?: LocalDate.now()) >= LocalDate.now().minusMonths(6) }.sortedByDescending { it.issued }
                         billsUpdatedAt = System.currentTimeMillis()
-                    } catch (e: Exception) { billingError = friendlyError(e) }
+                    }, onFailure = { error ->
+                        if(error is VodafoneFailure && error.status == 401) throw error
+                        billingError = if(accounts.isEmpty()) "Vodafone did not return a billing account for these services." else friendlyError(error as Exception)
+                    })
                     val data = AccountData(services, pools, VodafoneParser.counters(consumptions), bills, System.currentTimeMillis(), billingError, billsUpdatedAt)
                     val currentCycle = pools.firstOrNull()?.cycle?.let { Cycle.containing(LocalDate.now(), it.start.dayOfMonth) } ?: Cycle.containing(LocalDate.now())
                     mutableState.update { it.copy(account = data, connected = true, loading = false, selectedCycle = if (followCurrentCycle || it.account == null) currentCycle else it.selectedCycle) }
-                    android.util.Log.i("VodaLensData", "Live account: services=${services.size}; pools=${pools.size}; lineCounters=${data.lineUsed.size}; bills=${bills.size}; billingError=${billingError ?: "none"}")
+                    if(debugLogging) android.util.Log.i("VodaLensData", "Live account: services=${services.size}; pools=${pools.size}; lineCounters=${data.lineUsed.size}; bills=${bills.size}; billingError=${billingError ?: "none"}")
                     persist()
                     loadHistoryLocked(state.value.selectedCycle, force = true)
                 } catch (e: Exception) {
+                    if(e is CancellationException) throw e
                     mutableState.update { it.copy(loading = false, error = friendlyError(e), connected = if (e is VodafoneFailure && e.status == 401) false else it.connected) }
                 }
             }
@@ -115,22 +135,28 @@ class LensViewModel(application: Application) : AndroidViewModel(application) {
         if (!state.value.connected) return
         mutableState.update { it.copy(historyLoading = true) }
         try {
-            for (service in state.value.account?.services.orEmpty()) {
-                currentCoroutineContext().ensureActive()
-                val key = "${service.number}|${cycle.key}"
+            val services = state.value.account?.services.orEmpty().filter { service ->
                 val cached = state.value.histories.firstOrNull { it.number == service.number && it.cycle == cycle.key }
-                if (!force && cached != null && (cycle.end <= LocalDate.now() || System.currentTimeMillis() - cached.fetchedAt < 300_000)) continue
-                try {
-                    val history = api.history(service.number, cycle)
-                    android.util.Log.i("VodaLensData", "History: cycle=${cycle.key}; records=${history.sourceRecordCount}; dailyTotals=${history.sessions.size}; complete=${history.complete}")
+                force || cached == null || cycle.end > LocalDate.now() && System.currentTimeMillis() - cached.fetchedAt >= 300_000
+            }
+            val results = services.parallelReads(networkGate) { service ->
+                val result = try { Result.success(api.history(service.number, cycle)) }
+                catch(error: CancellationException) { throw error }
+                catch(error: Exception) { Result.failure<History>(error) }
+                service to result
+            }
+            currentCoroutineContext().ensureActive()
+            for((service, result) in results) {
+                val key = "${service.number}|${cycle.key}"
+                result.fold(onSuccess = { history ->
+                    if(debugLogging) android.util.Log.i("VodaLensData", "History: cycle=${cycle.key}; records=${history.sourceRecordCount}; dailyTotals=${history.sessions.size}; complete=${history.complete}")
                     mutableState.update { it.copy(histories = it.histories.filterNot { old -> old.number == service.number && old.cycle == cycle.key } + history, historyErrors = it.historyErrors - key) }
                     persist()
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    android.util.Log.i("VodaLensData", "History unavailable: cycle=${cycle.key}; status=${(e as? VodafoneFailure)?.status ?: 0}; reason=${friendlyError(e)}")
-                    mutableState.update { it.copy(historyErrors = it.historyErrors + (key to friendlyError(e))) }
-                    if (e is VodafoneFailure && e.status == 401) { mutableState.update { it.copy(connected = false, error = friendlyError(e)) }; break }
-                }
+                }, onFailure = { error ->
+                    val failure = error as Exception
+                    if(debugLogging) android.util.Log.i("VodaLensData", "History unavailable: cycle=${cycle.key}; status=${(failure as? VodafoneFailure)?.status ?: 0}")
+                    mutableState.update { it.copy(historyErrors = it.historyErrors + (key to friendlyError(failure)), connected = if(failure is VodafoneFailure && failure.status == 401) false else it.connected, error = if(failure is VodafoneFailure && failure.status == 401) friendlyError(failure) else it.error) }
+                })
             }
         } finally { mutableState.update { it.copy(historyLoading = false) } }
     }
@@ -140,7 +166,19 @@ class LensViewModel(application: Application) : AndroidViewModel(application) {
         store.write("cache", CacheCodec.encode(snapshot.account, snapshot.histories.filter { it.cycle >= cutoff }))
     }
     fun disconnect() {
-        viewModelScope.launch(Dispatchers.IO) { syncLock.withLock { store.clear(); mutableState.value = UiState() } }
+        historyJob?.cancel()
+        refreshJob?.cancel()
+        viewModelScope.launch(Dispatchers.IO) {
+            syncLock.withLock {
+                reconnectCache = null
+                mutableState.value = UiState()
+                try {
+                    val revoked = api.disconnect()
+                    mutableState.value = UiState(error = if(revoked) null else "Removed from this phone. Vodafone could not confirm remote revocation; other Vodafone sessions may still be active.")
+                } catch(error: CancellationException) { throw error }
+                catch(_: Exception) { mutableState.value = UiState(error = "Couldn’t confirm that saved data was cleared. Please try disconnecting again after reopening VodaLens.") }
+            }
+        }
     }
     fun showPreview() { mutableState.value = PreviewData.state() }
     fun exitPreview() { mutableState.value = UiState() }

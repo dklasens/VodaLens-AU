@@ -57,6 +57,7 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setRecentsScreenshotEnabled(false)
         if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enableEdgeToEdge()
         setContent {
@@ -70,6 +71,9 @@ private val shortDate = DateTimeFormatter.ofPattern("d MMM")
 private val fullDate = DateTimeFormatter.ofPattern("d MMM yyyy")
 private val dayDate = DateTimeFormatter.ofPattern("EEE, d MMM")
 private val monthDate = DateTimeFormatter.ofPattern("MMM yyyy")
+private val billMonthDate = DateTimeFormatter.ofPattern("MMMM yyyy")
+private val longDayDate = DateTimeFormatter.ofPattern("EEEE, d MMMM")
+private val updateDate = DateTimeFormatter.ofPattern("d MMM, h:mm a")
 private fun Cycle.label() = "${start.format(shortDate)} – ${end.minusDays(1).format(shortDate)}"
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,9 +120,9 @@ fun VodaLensApp(model: LensViewModel = viewModel()) {
             if (state.account == null) {
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { CircularProgressIndicator(); Spacer(Modifier.height(20.dp)); Text("Getting your Vodafone account…") }
             } else if (state.selectedLine != null) {
-                DailyScreen(state, model, selectedDay = { selectedDay = it })
+                DailyScreen(state, model, onConnect = { login = true }, selectedDay = { selectedDay = it })
             } else if (state.tab == 0) UsageScreen(state, model, onConnect = { login = true }, selectedDay = { selectedDay = it })
-            else BillsScreen(state, onBill = { selectedBill = it }, onRetry = model::refresh)
+            else BillsScreen(state, onBill = { selectedBill = it }, onRetry = model::refresh, onConnect = { login = true })
         }
     }
     if (accountSheet) ModalBottomSheet(onDismissRequest = { accountSheet = false }) {
@@ -126,7 +130,7 @@ fun VodaLensApp(model: LensViewModel = viewModel()) {
             Text("Your connection", style = MaterialTheme.typography.headlineSmall)
             Text(if (state.demo) "You’re viewing sample data." else if (state.connected) "Connected to My Vodafone" else "Vodafone sign-in required", style = MaterialTheme.typography.titleMedium)
             Text("Your connection and usage history are encrypted on this phone. VodaLens has no account server, advertising or analytics.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            state.account?.updatedAt?.takeIf { it > 0 }?.let { Text("Last updated ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("d MMM, h:mm a"))}", style = MaterialTheme.typography.bodySmall) }
+            state.account?.updatedAt?.takeIf { it > 0 }?.let { Text("Last updated ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(updateDate)}", style = MaterialTheme.typography.bodySmall) }
             if (state.demo) Button(onClick = { accountSheet = false; model.exitPreview() }, modifier = Modifier.fillMaxWidth()) { Text("Leave preview") }
             else {
                 if (!state.connected) Button(onClick = { accountSheet = false; login = true }, modifier = Modifier.fillMaxWidth()) { Text("Reconnect Vodafone") }
@@ -135,10 +139,10 @@ fun VodaLensApp(model: LensViewModel = viewModel()) {
             Text("Unofficial personal companion for Vodafone AU.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    if (disconnectDialog) AlertDialog(onDismissRequest = { disconnectDialog = false }, title = { Text("Disconnect Vodafone?") }, text = { Text("This removes the saved connection and usage history from this phone. Your Vodafone account stays unchanged.") }, confirmButton = { TextButton(onClick = { disconnectDialog = false; model.disconnect() }) { Text("Disconnect") } }, dismissButton = { TextButton(onClick = { disconnectDialog = false }) { Text("Keep connected") } })
+    if (disconnectDialog) AlertDialog(onDismissRequest = { disconnectDialog = false }, title = { Text("Disconnect Vodafone?") }, text = { Text("This removes the saved connection and usage history from this phone. VodaLens also asks Vodafone to revoke this connection. Vodafone may sign out other sessions using the same web-client grant. Revocation cannot be confirmed while offline.") }, confirmButton = { TextButton(onClick = { disconnectDialog = false; model.disconnect() }) { Text("Disconnect") } }, dismissButton = { TextButton(onClick = { disconnectDialog = false }) { Text("Keep connected") } })
     selectedBill?.let { bill -> ModalBottomSheet(onDismissRequest = { selectedBill = null }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text(bill.issued?.format(DateTimeFormatter.ofPattern("MMMM yyyy")) ?: "Bill details", style = MaterialTheme.typography.headlineSmall)
+            Text(bill.issued?.format(billMonthDate) ?: "Bill details", style = MaterialTheme.typography.headlineSmall)
             Text(money(bill.amountCents), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold)
             DetailRow("Status", bill.status.replaceFirstChar { it.titlecase() })
             DetailRow("Bill number", bill.number.ifEmpty { "Unavailable" })
@@ -149,9 +153,9 @@ fun VodaLensApp(model: LensViewModel = viewModel()) {
         }
     } }
     selectedDay?.let { date -> ModalBottomSheet(onDismissRequest = { selectedDay = null }) {
-        val histories = state.histories.filter { it.cycle == state.selectedCycle.key }
+        val histories = remember(state.histories, state.selectedCycle) { state.histories.filter { it.cycle == state.selectedCycle.key } }
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.headlineSmall)
+            Text(date.format(longDayDate), style = MaterialTheme.typography.headlineSmall)
             state.account?.services.orEmpty().filter { state.selectedLine == null || state.selectedLine == "all" || it.number == state.selectedLine }.forEachIndexed { index, service ->
                 val history = histories.firstOrNull { it.number == service.number }
                 ServiceUsageRow(service, state.account!!.services.indexOf(service), history?.daily?.get(date) ?: if(history != null) 0 else null, null)
@@ -188,9 +192,11 @@ private fun UsageScreen(state: UiState, model: LensViewModel, onConnect: () -> U
     val account = state.account ?: return
     val current = currentCycle(account)
     val isCurrent = state.selectedCycle.start == current.start
-    val histories = state.histories.filter { it.cycle == state.selectedCycle.key }
-    val allFetched = account.services.all { s -> histories.any { it.number == s.number && it.complete } }
-    val totals = histories.flatMap { it.sessions }.groupBy { it.date }.mapValues { (_, records) -> records.sumOf { it.bytes } }
+    val histories = remember(state.histories, state.selectedCycle) { state.histories.filter { it.cycle == state.selectedCycle.key } }
+    val allFetched = remember(account.services, histories) { account.services.all { s -> histories.any { it.number == s.number && it.complete } } }
+    val totals = remember(histories) { histories.flatMap { it.sessions }.groupBy { it.date }.mapValues { (_, records) -> records.sumOf { it.bytes } } }
+    val today = LocalDate.now()
+    val recentDates = remember(state.selectedCycle, today) { state.selectedCycle.dates().filter { it <= today }.takeLast(7).reversed() }
     LazyColumn(Modifier.fillMaxSize().widthIn(max = 680.dp), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item { CycleSelector(current, state.selectedCycle, model::selectCycle, if(isCurrent) account.updatedAt else histories.minOfOrNull { it.fetchedAt } ?: 0) }
         if (state.error != null || !state.connected && !state.demo) item { Notice(state.error ?: "Reconnect to update your saved data.", if (!state.connected) "Reconnect" else "Try again", if (!state.connected) onConnect else model::refresh, attention = true, heading = if(!state.connected) "Sign-in required" else "Couldn’t refresh") }
@@ -222,7 +228,7 @@ private fun UsageScreen(state: UiState, model: LensViewModel, onConnect: () -> U
         item { SectionHeading("By day", if (isCurrent) "This billing cycle" else state.selectedCycle.start.format(monthDate)) }
         item { DailyChart(state.selectedCycle, totals, allFetched, selectedDay) }
         if (histories.isNotEmpty()) {
-            val dates = state.selectedCycle.dates().filter { it <= LocalDate.now() }.takeLast(7).reversed()
+            val dates = recentDates
             items(dates) { date -> DayRow(date, if(allFetched || totals.containsKey(date)) totals[date] ?: 0 else null, onClick = { selectedDay(date) }) }
             item { TextButton(onClick = { model.selectLine("all") }, modifier = Modifier.fillMaxWidth()) { Text("View every day") } }
         } else item { Notice(if(state.historyLoading) "Loading daily usage…" else "No history is cached for this cycle.", if(state.historyLoading) null else "Load history", model::retryHistory) }
@@ -278,21 +284,24 @@ private fun CycleSelector(current: Cycle, selected: Cycle, onSelect: (Cycle) -> 
     }
 }
 @Composable
-private fun DailyScreen(state: UiState, model: LensViewModel, selectedDay: (LocalDate) -> Unit) {
+private fun DailyScreen(state: UiState, model: LensViewModel, onConnect: () -> Unit, selectedDay: (LocalDate) -> Unit) {
     val account = state.account ?: return
     val service = account.services.firstOrNull { it.number == state.selectedLine }
     val accent = if(service != null) lineColor(account.services.indexOf(service)) else LensAccents.data(MaterialTheme.colorScheme.surface.luminance() > .5f)
-    val histories = state.histories.filter { it.cycle == state.selectedCycle.key && (state.selectedLine == "all" || it.number == state.selectedLine) }
-    val allFetched = if(service != null) histories.any { it.complete } else account.services.all { s -> histories.any { it.number == s.number && it.complete } }
-    val totals = histories.flatMap { it.sessions }.groupBy { it.date }.mapValues { (_, rows) -> rows.sumOf { it.bytes } }
+    val histories = remember(state.histories, state.selectedCycle, state.selectedLine) { state.histories.filter { it.cycle == state.selectedCycle.key && (state.selectedLine == "all" || it.number == state.selectedLine) } }
+    val allFetched = remember(service, histories, account.services) { if(service != null) histories.any { it.complete } else account.services.all { s -> histories.any { it.number == s.number && it.complete } } }
+    val totals = remember(histories) { histories.flatMap { it.sessions }.groupBy { it.date }.mapValues { (_, rows) -> rows.sumOf { it.bytes } } }
+    val today = LocalDate.now()
+    val dates = remember(state.selectedCycle, today) { state.selectedCycle.dates().filter { it <= today }.reversed() }
     LazyColumn(Modifier.fillMaxSize().widthIn(max = 680.dp), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        if (state.error != null || !state.connected && !state.demo) item { Notice(state.error ?: "Reconnect to update your saved data.", if (!state.connected) "Reconnect" else "Try again", if (!state.connected) onConnect else model::refresh, attention = true, heading = if(!state.connected) "Sign-in required" else "Couldn’t refresh") }
         item { Text(service?.formatted ?: "All services", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, color = accent); service?.let { Text(it.plan, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         item { CycleSelector(currentCycle(account), state.selectedCycle, model::selectCycle, histories.minOfOrNull { it.fetchedAt } ?: 0) }
         item { Text(if(histories.isEmpty()) "—" else dataSize(histories.sumOf { it.total }), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold); Text("Reported this cycle", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { DailyChart(state.selectedCycle, totals, allFetched, selectedDay, accent) }
         if(!allFetched) item { Notice(if(state.historyLoading) "Loading Vodafone history…" else "Some daily history is unavailable.", if(state.historyLoading) null else "Try again", model::retryHistory) }
         histories.mapNotNull { it.warning }.distinct().forEach { warning -> item { Notice(warning) } }
-        items(state.selectedCycle.dates().filter { it <= LocalDate.now() }.reversed()) { date -> DayRow(date, if(allFetched || totals.containsKey(date)) totals[date] ?: 0 else null, onClick = { selectedDay(date) }) }
+        items(dates) { date -> DayRow(date, if(allFetched || totals.containsKey(date)) totals[date] ?: 0 else null, onClick = { selectedDay(date) }) }
         item { Text("A day with no returned sessions is shown as 0 B only after Vodafone returns that period. Older empty periods may reflect Vodafone’s retention limit. Recent sessions may arrive later.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
@@ -300,8 +309,8 @@ private fun DailyScreen(state: UiState, model: LensViewModel, selectedDay: (Loca
 private fun DailyChart(cycle: Cycle, totals: Map<LocalDate, Long>, allFetched: Boolean, onDay: (LocalDate) -> Unit, accent: Color? = null) {
     val color = accent ?: LensAccents.data(MaterialTheme.colorScheme.surface.luminance() > .5f)
     val muted = MaterialTheme.colorScheme.surfaceContainerHighest
-    val dates = cycle.dates()
-    val maximum = (totals.values.maxOrNull() ?: 1L).coerceAtLeast(1).toFloat()
+    val dates = remember(cycle) { cycle.dates() }
+    val maximum = remember(totals) { (totals.values.maxOrNull() ?: 1L).coerceAtLeast(1).toFloat() }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Canvas(Modifier.fillMaxWidth().height(124.dp).semantics { contentDescription = "Daily usage chart for ${cycle.label()}. Daily values are listed below." }.pointerInput(cycle, totals) { detectTapGestures { offset -> val index = (offset.x / size.width * dates.size).toInt().coerceIn(0, dates.lastIndex); if(dates[index] <= LocalDate.now()) onDay(dates[index]) } }) {
             val step = size.width / dates.size
@@ -316,15 +325,16 @@ private fun DailyChart(cycle: Cycle, totals: Map<LocalDate, Long>, allFetched: B
     }
 }
 @Composable
-private fun BillsScreen(state: UiState, onBill: (Bill) -> Unit, onRetry: () -> Unit) {
+private fun BillsScreen(state: UiState, onBill: (Bill) -> Unit, onRetry: () -> Unit, onConnect: () -> Unit) {
     val account = state.account ?: return
-    val bills = account.bills.sortedByDescending { it.issued }
+    val bills = remember(account.bills) { account.bills.sortedByDescending { it.issued } }
     val amountDue = currentAmountDue(bills)
     val currentBills = bills.filter { it.isCurrent }
     val unpaid = currentBills.filter { (it.outstandingCents ?: 0) > 0 }.minByOrNull { it.due ?: LocalDate.MAX }
     val overdue = unpaid?.due?.let { it < LocalDate.now() } == true
     val upcoming = currentBills.filter { it.due != null && it.due >= LocalDate.now() && (it.outstandingCents ?: 0) > 0 }.minByOrNull { it.due!! }
     LazyColumn(Modifier.fillMaxSize().widthIn(max = 680.dp), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        if (state.error != null || !state.connected && !state.demo) item { Notice(state.error ?: "Reconnect to update your saved data.", if (!state.connected) "Reconnect" else "Try again", if (!state.connected) onConnect else onRetry, attention = true, heading = if(!state.connected) "Sign-in required" else "Couldn’t refresh") }
         item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("Bills, at a glance.", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold); RefreshTimestamp(account.billsUpdatedAt) } }
         item { Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -350,7 +360,7 @@ private fun BillsScreen(state: UiState, onBill: (Bill) -> Unit, onRetry: () -> U
                 Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) { LensIcon("bill", "", Modifier.size(22.dp)) }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(bill.issued?.format(DateTimeFormatter.ofPattern("MMMM yyyy")) ?: "Vodafone bill", style = MaterialTheme.typography.titleSmall)
+                        Text(bill.issued?.format(billMonthDate) ?: "Vodafone bill", style = MaterialTheme.typography.titleSmall)
                         Text(bill.status.replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(money(bill.amountCents), style = MaterialTheme.typography.titleMedium)
@@ -366,7 +376,10 @@ private fun BillsScreen(state: UiState, onBill: (Bill) -> Unit, onRetry: () -> U
 private fun RefreshTimestamp(timestamp: Long) {
     val use24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
     val pattern = if(use24Hour) "d MMM yyyy, HH:mm" else "d MMM yyyy, h:mm a"
-    val text = if(timestamp > 0) "Last refreshed ${Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(pattern))}" else "Not yet refreshed"
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val zone = ZoneId.systemDefault()
+    val formatter = remember(pattern, locale) { DateTimeFormatter.ofPattern(pattern, locale) }
+    val text = remember(timestamp, formatter, zone) { if(timestamp > 0) "Last refreshed ${Instant.ofEpochMilli(timestamp).atZone(zone).format(formatter)}" else "Not yet refreshed" }
     Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 @Composable

@@ -11,12 +11,12 @@ const { createApplication } = require('../src/app.cjs');
 const { RenewalResearch, armRenewalResearch, TOKEN_URL, CLIENT_ID, REDIRECT_URI } = require('../src/renewal-research.cjs');
 const NOW = Date.parse('2026-11-15T02:00:00Z');
 const ORIGINAL = 'private-original-refresh-credential';
-function fixture(t, { failure, apiFailure = false } = {}) {
+function fixture(t, { failure, apiFailure = false, enabled = true } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vodalens-renewal-test-'));
   const evidenceFile = path.join(directory, 'evidence.json');
   let now = NOW, tokenRequests = 0;
   const store = new Store({ filename: ':memory:', key: randomBytes(32) });
-  const config = { publicOrigin: 'http://127.0.0.1:8766', authMethod: 'myvodafone-session', ownerId: 'test-owner', apiToken: 'private-development-api-token-longer-than-thirty-two-characters', allowedOrigins: [], streams: ['edge', 'ios', 'android'] };
+  const config = { renewalResearchEnabled: enabled, publicOrigin: 'http://127.0.0.1:8766', authMethod: 'myvodafone-session', ownerId: 'test-owner', apiToken: 'private-development-api-token-longer-than-thirty-two-characters', allowedOrigins: [], streams: ['edge', 'ios', 'android'] };
   const calls = [];
   const fetchImpl = async (url, options) => {
     calls.push({ url, options, at: now });
@@ -31,7 +31,7 @@ function fixture(t, { failure, apiFailure = false } = {}) {
   };
   const options = { config, store, fetchImpl, clock: () => now, sleep: async ms => { now += ms; }, directory, evidenceFile };
   const research = new RenewalResearch(options);
-  const arm = () => armRenewalResearch({ directory, clock: () => now });
+  const arm = () => armRenewalResearch({ enabled, directory, clock: () => now });
   const stage = () => { const approval = arm(); return research.stage({ probeId: approval.probeId, refreshToken: ORIGINAL, accessTokenExpiresAt: NOW + 300000 }); };
   t.after(() => { store.close(); fs.rmSync(directory, { recursive: true, force: true }); });
   return { research, options, directory, evidenceFile, store, calls, arm, stage };
@@ -130,5 +130,28 @@ test('research HTTP endpoints require the backend session, exact origins and exp
   assert.equal(staged.status, 200); assert.equal((await staged.text()).includes(ORIGINAL), false);
   assert.equal((await request('/commit', { method: 'POST', body: { probeId: input.probeId, browserReleased: false } })).status, 409);
   assert.equal((await request('/abort', { method: 'POST', body: { probeId: input.probeId } })).status, 200);
+  assert.equal(calls.length, 0);
+});
+
+test('research is disabled by default even with an old arm and matching loopback origin', async t => {
+  const { research, arm, options, store, calls, directory } = fixture(t, { enabled: false });
+  fs.writeFileSync(path.join(directory, 'arm.json'), JSON.stringify({ probeId: 'old-arm', expiresAt: NOW + 600000, maxTokenRequests: 2 }));
+  assert.equal(research.status().state, 'disabled');
+  assert.throws(() => arm(), /disabled/);
+  assert.throws(() => research.stage({ probeId: 'old-arm', refreshToken: ORIGINAL, accessTokenExpiresAt: NOW + 300000 }), error => error.code === 'renewal_not_armed');
+  assert.throws(() => research.commit({ probeId: 'old-arm', browserReleased: true }), error => error.code === 'research_disabled');
+  const server = createApplication({ config: options.config, store, auth: {}, research });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => { server.close(); server.closeAllConnections(); await once(server, 'close'); });
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/research/vodafone/renewal-probe`, { headers: { authorization: `Bearer ${options.config.apiToken}` } });
+  assert.equal(response.status, 404);
+  assert.equal(calls.length, 0);
+});
+
+test('research opt-in cannot enable a listener bound to all interfaces', t => {
+  const { research, options, calls } = fixture(t);
+  options.config.host = '0.0.0.0';
+  assert.equal(research.status().state, 'disabled');
+  assert.throws(() => research.stage({ probeId: 'not-approved', refreshToken: ORIGINAL, accessTokenExpiresAt: NOW + 300000 }), error => error.code === 'renewal_not_armed');
   assert.equal(calls.length, 0);
 });

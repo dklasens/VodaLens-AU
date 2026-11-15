@@ -20,6 +20,7 @@ function loadConfig(env = process.env) {
   if (!['none', 'client_secret_basic'].includes(tokenAuthMethod)) throw new Error('VODAFONE_TOKEN_AUTH_METHOD must be none or client_secret_basic.');
   const clientSecret = env.VODAFONE_CLIENT_SECRET || '';
   if (clientId && tokenAuthMethod === 'client_secret_basic' && !clientSecret) throw new Error('The registered confidential client requires VODAFONE_CLIENT_SECRET.');
+  if (env.VODALENS_ENABLE_RENEWAL_RESEARCH && !['true', 'false'].includes(env.VODALENS_ENABLE_RENEWAL_RESEARCH)) throw new Error('VODALENS_ENABLE_RENEWAL_RESEARCH must be true or false.');
   return {
     host: env.HOST || '127.0.0.1', port, publicOrigin: origin.origin,
     redirectUri: new URL('/oauth/vodafone/callback', origin).toString(),
@@ -28,6 +29,7 @@ function loadConfig(env = process.env) {
     apiToken, vaultKey, ownerId: env.VODALENS_OWNER_ID || 'personal-owner',
     database: path.resolve(env.DATABASE_PATH || '.data/vodalens.sqlite'),
     allowedOrigins: (env.ALLOWED_CLIENT_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean),
+    renewalResearchEnabled: env.VODALENS_ENABLE_RENEWAL_RESEARCH === 'true',
     streams: STREAMS
   };
 }

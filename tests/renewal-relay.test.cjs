@@ -9,14 +9,14 @@ const CLIENT = 'TE6munQ7o6txJRqZeSzLBzDECX1yVBJO';
 const KEY = `@@auth0spajs@@::${CLIENT}::https://dsapi.vodafone.com.au::openid profile email offline_access`;
 const NOW = Date.parse('2026-11-15T02:00:00Z');
 const REFRESH = 'private-browser-refresh-credential';
-function relay({ expiry = NOW + 300000 } = {}) {
+function relay({ expiry = NOW + 300000, enabled = true } = {}) {
   let listener;
   const body = { client_id: CLIENT, audience: 'https://dsapi.vodafone.com.au', refresh_token: REFRESH, access_token: `header.${Buffer.from(JSON.stringify({ exp: expiry / 1000 })).toString('base64url')}.signature` };
   const storage = { [KEY]: JSON.stringify({ body }), unrelated: 'preserve-this' };
   Object.defineProperties(storage, { getItem: { value: key => storage[key] || null }, removeItem: { value: key => { delete storage[key]; } } });
   const window = { addEventListener() {} }; window.top = window;
   const context = vm.createContext({ window, location: { origin: 'https://my.vodafone.com.au' }, localStorage: storage, atob, Date: class extends Date { static now() { return NOW; } }, chrome: { runtime: { id: 'trusted', getURL: file => 'chrome-extension://trusted/' + file, onMessage: { addListener: fn => { listener = fn; } } } } });
-  vm.runInContext(source, context);
+  vm.runInContext(enabled ? source.replace('const RESEARCH_ENABLED = false;', 'const RESEARCH_ENABLED = true;') : source, context);
   const sender = { id: 'trusted', url: 'chrome-extension://trusted/background.js' };
   const send = (message, from = sender) => { let result; listener(message, from, value => { result = value; }); return result; };
   return { storage, body, send };
@@ -45,4 +45,12 @@ test('expired or nearly expired browser sessions never export a refresh credenti
   const { send } = relay({ expiry: NOW + 60000 });
   const result = send({ type: 'prepareRenewalResearch', probeId: 'test-id' });
   assert.equal(result.errorCode, 'renewal_stale_page'); assert.equal(result.refreshToken, undefined);
+});
+
+test('default relay refuses refresh export even from its own background worker', () => {
+  const { send, storage } = relay({ enabled: false });
+  const result = send({ type: 'prepareRenewalResearch', probeId: 'test-id' });
+  assert.equal(result.errorCode, 'research_disabled');
+  assert.equal(result.refreshToken, undefined);
+  assert.ok(storage[KEY]);
 });

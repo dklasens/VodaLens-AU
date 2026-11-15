@@ -60,4 +60,38 @@ class SessionRenewalTest {
         assertTrue(stored.uncertain)
         assertEquals("old-refresh", stored.refresh)
     }
+    @Test fun definiteRateLimitPreservesCredentialAndWaitsBeforeRetrying() = runBlocking {
+        val original = Credentials("old-access", "old-refresh", 900)
+        var stored = original
+        var time = 1000L
+        var exchanges = 0
+        val renewal = SessionRenewal({ stored }, { stored=it }, {
+            exchanges++
+            if(exchanges == 1) throw RenewalRateLimited()
+            RenewalResponse("new-access", "new-refresh", 300, "Bearer")
+        }, now={time})
+        repeat(2) {
+            try { renewal.access(); fail("Rate limited") } catch(e: VodafoneFailure) { assertEquals(429,e.status) }
+            assertEquals(original,stored)
+        }
+        assertEquals(1,exchanges)
+        time += 60_000
+        assertEquals("new-access",renewal.access())
+        assertEquals(2,exchanges)
+    }
+    @Test fun ambiguousServerFailureCannotReplayRotatedPredecessor() = runBlocking {
+        var stored = Credentials("old-access", "old-refresh", 900)
+        var exchanges = 0
+        val renewal = SessionRenewal({ stored }, { stored=it }, { exchanges++; throw VodafoneFailure(401,"Unknown server outcome") }, now={1000})
+        repeat(2) { try { renewal.access(); fail("Reconnect required") } catch(e: VodafoneFailure) { assertEquals(401,e.status) } }
+        assertEquals(1,exchanges)
+        assertTrue(stored.uncertain)
+    }
+    @Test fun cancellationRetainsUncertainMarkerAndPropagates() = runBlocking {
+        var stored = Credentials("old-access", "old-refresh", 900)
+        val renewal = SessionRenewal({ stored }, { stored=it }, { throw CancellationException("Cancelled") }, now={1000})
+        try { renewal.access(); fail("Cancellation must propagate") } catch(_: CancellationException) { }
+        assertTrue(stored.uncertain)
+    }
+
 }
