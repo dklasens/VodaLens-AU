@@ -20,3 +20,11 @@ Review the agents' diffs together, run shared and native tests, lint, publicatio
 ## Security decisions
 
 An HTTP 5xx alone does not establish that a rotating credential was unused. Only definite non-consuming errors can restore retry eligibility; ambiguous outcomes continue to require reconnection. Remote revocation is tested with mocks, not against the user's active session. Requiring an unlocked device for every Keystore operation is considered separately from explicit AES-256, because it can change lock-state/restart behavior and existing key compatibility.
+
+## Verified results
+
+All agent diffs were reviewed together. Device testing found and fixed a soft sign-in timeout regression; review also narrowed an overbroad POST classifier. Final local results: 40 Android tests, 104 shared tests, 5 publication tests and zero lint errors. Official wrapper-JAR checksum comparison, SHA-pinned wrapper validation, pinned distribution checksum, Actionlint and redacted full-history Gitleaks checks passed. Final source CI passed without signing credentials.
+
+The matching-certificate Pixel update preserved cached data. Official-site sign-in, token-free handoff, usage/history/billing, form retention across a real theme transition, saved-thumbnail hiding and a 330-second same-process background/foreground renewal were verified. Normal screenshots remain available by user choice. Vodafone displayed a generic page error during sign-in; the connection and native reads succeeded. The later API-resource classifier correction is regression-tested; causation of that carrier error remains unproven.
+
+No live revocation, deliberate carrier rate-limit/server-failure injection, physical foldable-device test or Docker image build was performed. Failure and revocation behavior was tested with mocks. Multi-day session lifetime remains unknown.

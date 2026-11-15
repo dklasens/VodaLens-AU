@@ -23,7 +23,7 @@ The app follows your wallpaper colours and light/dark setting. Different service
 
 ## Get started
 
-1. Download **VodaLens-0.1.2.apk** from [Releases](https://github.com/dklasens/VodaLens-AU/releases/latest).
+1. Download **VodaLens-0.1.3.apk** from [Releases](https://github.com/dklasens/VodaLens-AU/releases/latest).
 2. Open the APK on an **Android 16 or newer** phone. Android may ask you to allow installation from the app you used to download it.
 3. Open VodaLens and choose **Connect My Vodafone**.
 4. Sign in on Vodafone's page inside the app, then tap **Use this Vodafone account**.
