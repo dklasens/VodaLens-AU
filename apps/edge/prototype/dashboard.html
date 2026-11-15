@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en-AU">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Voda Lens · Usage overview</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+  <header class="topbar"><div class="shell topbar-content">
+    <a class="brand" href="dashboard.html"><span class="brand-mark" aria-hidden="true">v.</span><span>Voda <strong>Lens</strong></span></a>
+    <span class="local-badge"><span class="status-dot"></span> Stored on this device</span>
+  </div></header>
+  <main class="shell">
+    <div id="preview-banner" class="notice" hidden>Local preview · the browser sync becomes available after loading the extension.</div>
+    <section class="page-heading">
+      <div><p class="eyebrow">YOUR VODAFONE, MADE CLEARER</p><h1>Usage overview<span class="red-dot">.</span></h1><p class="muted">Every line. Every day. One shared pool.</p></div>
+      <div class="heading-actions"><button class="button" id="settings-toggle" aria-expanded="false" aria-controls="settings-panel">Cycle settings</button><button class="button primary" id="sync">Sync Vodafone <span aria-hidden="true">↻</span></button></div>
+    </section>
+    <form id="settings-panel" class="panel settings-panel" hidden>
+      <label>Monthly shared allowance (GB)<input id="allowance" type="number" min="0.01" max="100000" step="any" required></label>
+      <label>Cycle starts on day<input id="cycle-day" type="number" min="1" max="31" step="1" required></label>
+      <button class="button primary" type="submit">Save settings</button><p class="small muted">Your confirmed allowance is shared across all lines. Dates use Australia/Sydney.</p>
+    </form>
+    <div class="filter-row"><label class="inline-label" for="cycle">Billing cycle <select id="cycle"></select></label><p class="small muted" id="sync-time"></p></div>
+    <div id="sync-status" class="notice" role="status" aria-live="polite" hidden></div>
+    <div id="error-status" class="notice error" role="alert" hidden></div>
+    <section class="metrics" aria-label="Usage summary">
+      <div class="panel metric"><p class="metric-label" id="balance-label">Shared data remaining</p><p class="metric-value" id="remaining">—</p><p class="small muted" id="remaining-context"></p></div>
+      <div class="panel metric"><p class="metric-label" id="used-label">Reported data used</p><p class="metric-value" id="used">—</p><p class="small muted" id="used-context"></p></div>
+      <div class="panel metric"><p class="metric-label" id="cycle-metric-label">Time remaining</p><p class="metric-value" id="days-left">—</p><p class="small muted" id="cycle-context"></p></div>
+    </section>
+    <section class="panel pace-panel" aria-labelledby="pace-title">
+      <div class="section-heading"><div><h2 id="pace-title">Your cycle, at a glance</h2><p class="muted small" id="pace-subtitle"></p></div><span class="quiet-badge" id="pace-status"></span></div>
+      <div class="meter-row"><div class="meter-label"><span>Billing cycle elapsed</span><strong id="time-percent">—</strong></div><div class="meter" id="time-meter" role="progressbar" aria-label="Billing cycle elapsed" aria-valuemin="0" aria-valuemax="100"><div class="meter-fill time-fill"></div></div></div>
+      <div class="meter-row"><div class="meter-label"><span id="data-meter-label">Shared data used</span><strong id="data-percent">—</strong></div><div class="meter" id="data-meter" role="progressbar" aria-label="Shared data used" aria-valuemin="0" aria-valuemax="100"><div class="meter-fill data-fill"></div></div></div>
+      <p class="small muted" id="pace-note"></p>
+    </section>
+    <section class="panel chart-panel" aria-labelledby="chart-title">
+      <div class="section-heading chart-heading"><div><h2 id="chart-title">Data usage by day</h2><p class="muted small" id="chart-subtitle">Vodafone’s recorded dates</p></div><div class="chart-controls"><label class="sr-only" for="line">Service</label><select id="line"><option value="all">All lines</option></select><div class="segmented" aria-label="Chart view"><button id="daily" class="selected" aria-pressed="true">Daily</button><button id="cumulative" aria-pressed="false">Cumulative</button></div></div></div>
+      <div class="legend" id="legend"></div>
+      <div class="chart-wrap" id="chart"></div>
+      <div class="chart-detail" id="chart-detail" aria-live="polite"></div>
+      <p class="small muted">Gaps mean no captured record. API daily totals use exact byte counts; current counters may be rounded. Dates are as reported by Vodafone.</p>
+    </section>
+    <section class="panel lines-panel" aria-labelledby="lines-title">
+      <div class="section-heading"><div><h2 id="lines-title">Usage by line</h2><p class="small muted">The shared allowance is counted once.</p></div><button id="export" class="text-button">Export daily CSV <span aria-hidden="true">↓</span></button></div>
+      <div class="table-wrap"><table><thead><tr><th>Service</th><th>Recorded usage</th><th>Share of recorded usage</th><th>Source / capture</th></tr></thead><tbody id="line-rows"></tbody></table></div>
+    </section>
+    <section class="help-row"><div><h3>How to keep this up to date</h3><p class="small muted">Open My Vodafone, click the Voda Lens toolbar icon, then Sync all services. To capture an older cycle, set its dates in Vodafone’s Usage filter and choose Capture this page for each line.</p></div><a class="text-button" href="https://my.vodafone.com.au/" target="_blank" rel="noreferrer">Open My Vodafone ↗</a></section>
+    <footer><span>Independent personal companion · no Vodafone password stored</span><span id="source-note">Local data only</span></footer>
+  </main>
+  <script src="core.js"></script><script src="dashboard.js"></script>
+</body>
+</html>

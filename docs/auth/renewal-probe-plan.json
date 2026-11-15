@@ -1,0 +1,57 @@
+{
+  "purpose": "Test two independent backend renewals after access-token expiry, using the refresh credential from the user\u2019s existing My Vodafone web session.",
+  "approval": "User explicitly approved this two-cycle local experiment, including encrypted credential transfer, retirement of its browser cache entry and retention of the latest encrypted replacement. No requests beyond the two-cycle budget are authorized.",
+  "localRecipient": "http://127.0.0.1:8766/v1/research/vodafone/renewal-probe/stage",
+  "request": {
+    "method": "POST",
+    "url": "https://authn.vodafone.com.au/oauth/token",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded",
+      "accept": "application/json"
+    },
+    "form": {
+      "client_id": "TE6munQ7o6txJRqZeSzLBzDECX1yVBJO",
+      "grant_type": "refresh_token",
+      "refresh_token": "<approved session credential; never included in evidence>",
+      "redirect_uri": "https://my.vodafone.com.au"
+    }
+  },
+  "maxBackendTokenRequests": 2,
+  "sequence": [
+    "Require one My Vodafone tab and a fresh browser access token",
+    "Stage the refresh credential encrypted with the existing local vault key",
+    "Remove only the matching Auth0 token-cache entry from that browser origin; leave cookies, other storage and account data alone",
+    "Navigate the donor tab to the extension\u2019s research status page",
+    "After the old access token expires, exchange its refresh credential and verify one account API read",
+    "Save the rotated refresh credential encrypted before API verification",
+    "After that access token expires, perform one more renewal and account read",
+    "Stop automatically after the second exchange or the first failure; retain the latest credential encrypted for review"
+  ],
+  "constraints": [
+    "No client registration or new OAuth authorization request",
+    "No browser cookies, passwords or client secret sent by the backend",
+    "No automatic retries or restart recovery",
+    "No simultaneous browser/backend use of the same refresh-token family",
+    "No credential values in logs, API responses or public evidence",
+    "The user may need to sign in to My Vodafone again afterward"
+  ],
+  "expectedDuration": "About ten minutes; the backend waits for natural access-token expiry. Edge can be used normally once the donor tab has handed off.",
+  "retention": "The research vault keeps the current refresh credential encrypted locally for approved follow-up. It does not start indefinite renewal.",
+  "implementation": {
+    "backend": "services/api/src/renewal-research.cjs",
+    "armScript": "scripts/arm-renewal-research.cjs",
+    "extensionRelay": "apps/edge/session-bridge/relay.js",
+    "userAction": "Run approved renewal test in the VodaLens popup"
+  },
+  "execution": {
+    "probeId": "bfd0a4f6-c701-40ec-88ba-810d023ff26b",
+    "state": "complete",
+    "tokenRequestsStarted": 2,
+    "verifiedApiReads": 2,
+    "backendRenewalVerified": true,
+    "automaticallyStopped": true,
+    "latestRefreshCredential": "Retained encrypted in the ignored local research vault",
+    "evidence": "docs/evidence/renewal-backend-probe.json",
+    "productionAutomaticRenewalEnabled": false
+  }
+}

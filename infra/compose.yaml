@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    ports:
+      - "127.0.0.1:8766:8766"
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://127.0.0.1:8766}
+      VODALENS_OWNER_ID: ${VODALENS_OWNER_ID:-personal-owner}
+      VODALENS_API_TOKEN: ${VODALENS_API_TOKEN:?Run npm run setup:local first}
+      VODALENS_VAULT_KEY: ${VODALENS_VAULT_KEY:?Run npm run setup:local first}
+      VODAFONE_AUTH_METHOD: ${VODAFONE_AUTH_METHOD:-myvodafone-session}
+      VODAFONE_CLIENT_ID: ${VODAFONE_CLIENT_ID:-}
+      VODAFONE_TOKEN_AUTH_METHOD: ${VODAFONE_TOKEN_AUTH_METHOD:-none}
+      VODAFONE_CLIENT_SECRET: ${VODAFONE_CLIENT_SECRET:-}
+      ALLOWED_CLIENT_ORIGINS: ${ALLOWED_CLIENT_ORIGINS:-}
+    volumes:
+      - vodalens-data:/var/lib/vodalens
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8766/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  vodalens-data:

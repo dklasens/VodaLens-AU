@@ -1,0 +1,21 @@
+node_modules/
+.DS_Store
+output/
+dist/
+local-data/
+.data/
+.env
+.env.*
+!.env.example
+*.har
+*.sqlite
+*.sqlite-*
+
+# Private signing material and local captures, wherever created
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+*.pem
+*.log

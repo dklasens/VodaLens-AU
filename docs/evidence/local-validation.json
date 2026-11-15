@@ -1,0 +1,65 @@
+{
+  "checks": {
+    "repository": "passed",
+    "testsPassed": 73,
+    "testsFailed": 0,
+    "providerInTests": "simulated",
+    "health": "ok",
+    "unauthenticatedStatus": 401,
+    "authMethod": "myvodafone-session",
+    "streams": [
+      "edge",
+      "ios",
+      "android"
+    ],
+    "builtBridgeMatchesSource": true
+  },
+  "liveAuthenticationProof": {
+    "source": "docs/evidence/myvodafone-session.json",
+    "installedEdgeHandoff": true,
+    "consumerApiRead": true,
+    "naturalExpiry": true,
+    "rejectedExpiredToken": true,
+    "replacementTokenAndApiRead": true,
+    "historyAndConsumptionForAllServices": true
+  },
+  "currentSessionSnapshot": {
+    "state": "reconnect_required",
+    "connected": false,
+    "shortLivedTokensRequireReconnection": true
+  },
+  "pendingCurrentPhase": [],
+  "nextPhase": [
+    "Integrate the Edge dashboard with the verified shared backend",
+    "Investigate independent mobile login/renewal before native implementation",
+    "Introduce HTTPS and per-device sessions before phone deployment"
+  ],
+  "limitations": [
+    "Provider pagination and longer retention remain unverified",
+    "Docker is unavailable, so container deployment has not been run"
+  ],
+  "computerUse": "Recovered; installed bridge handoff, reconnection and current expired-session feedback were verified in Edge.",
+  "renewalInvestigation": {
+    "source": "docs/evidence/renewal-backend-probe.json",
+    "implementationChecks": {
+      "testsPassed": 89,
+      "testsFailed": 0,
+      "providerInTests": "simulated",
+      "repositoryCheck": "passed",
+      "builtBridgeMatchesSource": true
+    },
+    "liveProof": {
+      "tokenExchanges": 2,
+      "afterNaturalExpiry": true,
+      "refreshTokenRotation": true,
+      "verifiedApiReads": 2,
+      "browserRequiredDuringRenewal": false
+    },
+    "vaultChecks": {
+      "directoryMode": "700",
+      "fileMode": "600",
+      "ciphertextOnly": true
+    },
+    "productionAutomaticRenewalEnabled": false
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "target": "https://authn.vodafone.com.au/oidc/register",
+  "requestedMetadata": {
+    "client_name": "VodaLens Local Development",
+    "redirect_uris": [
+      "http://127.0.0.1:8766/oauth/vodafone/callback"
+    ],
+    "token_endpoint_auth_method": "none",
+    "grant_types": [
+      "authorization_code",
+      "refresh_token"
+    ],
+    "response_types": [
+      "code"
+    ]
+  },
+  "httpStatus": 400,
+  "created": false,
+  "clientId": null,
+  "apiGrantVerified": false,
+  "authorizationCodeVerified": false,
+  "refreshVerified": false,
+  "outcome": "rejected",
+  "error": "Bad Request",
+  "description": "dynamic client registration is disabled"
+}

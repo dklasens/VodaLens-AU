@@ -1,0 +1,16 @@
+{
+  "purpose": "Check whether Vodafone enables dynamic client registration; intentionally omit mandatory redirect_uris so this is not a valid registration request.",
+  "request": {
+    "method": "POST",
+    "url": "https://authn.vodafone.com.au/oidc/register",
+    "headers": {
+      "content-type": "application/json",
+      "accept": "application/json"
+    },
+    "body": {}
+  },
+  "approval": "User explicitly approved this one empty registration probe after automatic approval review requested approval. Executed once on 15 November 2026 Sydney time.",
+  "result": "HTTP 400: missing redirect_uris. No client ID returned. This does not prove valid client registration is enabled.",
+  "evidence": "docs/evidence/vodafone-auth.json",
+  "allowed_next_action": "Do not repeat this probe. A valid client-creation request requires separate approval."
+}

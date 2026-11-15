@@ -1,0 +1,21 @@
+{
+  "name": "voda-lens",
+  "private": true,
+  "version": "0.1.0",
+  "engines": { "node": ">=26" },
+  "workspaces": ["packages/*", "services/*"],
+  "scripts": {
+    "test": "node --test tests/*.test.cjs services/api/tests/*.test.cjs",
+    "check": "node scripts/check.cjs",
+    "start": "node --env-file-if-exists=.env services/api/src/server.cjs",
+    "auth:probe": "node scripts/probe-auth.cjs",
+    "auth:status": "node --env-file-if-exists=.env scripts/auth-status.cjs",
+    "setup:local": "node scripts/init-local.cjs",
+    "auth:registration-plan": "node scripts/register-development-client.cjs",
+    "bridge:build": "node scripts/build-session-bridge.cjs",
+    "auth:renewal-plan": "node scripts/arm-renewal-research.cjs",
+    "auth:renewal-status": "node --env-file-if-exists=.env scripts/renewal-research-status.cjs",
+    "preview:build": "node scripts/build-edge-prototype.cjs",
+    "preview": "npm run preview:build && python3 -m http.server 8765 --bind 127.0.0.1 --directory output/edge-prototype"
+  }
+}

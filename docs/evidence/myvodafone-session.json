@@ -1,0 +1,18 @@
+{
+  "method": "myvodafone-browser-session",
+  "realProviderRequests": true,
+  "installedEdgeHandoffVerified": true,
+  "consumerApiReadVerified": true,
+  "naturalExpiryObserved": true,
+  "expiredSessionRejected": true,
+  "replacementTokenAndApiReadVerified": true,
+  "observedAccessTokenLifetimeSeconds": 299,
+  "automaticProviderRefreshSupported": false,
+  "serviceDiscoveryVerified": true,
+  "skippedAssets": 0,
+  "historyAndConsumptionReadForEveryService": true,
+  "unreadableHistoryRecords": 0,
+  "providerPaginationAndRetentionVerified": false,
+  "credentialsIncluded": false,
+  "phoneOrAccountIdentifiersIncluded": false
+}

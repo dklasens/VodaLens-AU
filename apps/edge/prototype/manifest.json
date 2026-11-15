@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Voda Lens — local usage companion",
+  "version": "0.1.0",
+  "description": "Daily and per-line Vodafone AU usage, with billing-cycle progress. Data stays in this browser.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Voda Lens", "default_popup": "popup.html" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self'"
+  }
+}

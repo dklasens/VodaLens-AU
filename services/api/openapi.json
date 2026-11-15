@@ -1,0 +1,963 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "VodaLens unified API",
+    "version": "0.1.0",
+    "description": "Single-owner development API shared by Edge, iOS and Android. Default authentication source is the user’s normal My Vodafone browser session. Provider credentials never appear in responses."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8766",
+      "description": "Local development only; phones need an HTTPS deployment."
+    }
+  ],
+  "security": [
+    {
+      "BackendSession": []
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "description": "Process health; no provider call.",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "ok"
+                    },
+                    "service": {
+                      "const": "vodalens-api"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "operationId": "capabilities",
+        "description": "Current streams and connection capabilities.",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/auth/vodafone/status": {
+      "get": {
+        "operationId": "vodafoneStatus",
+        "description": "Credential-free provider connection state.",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/vodafone/start": {
+      "post": {
+        "operationId": "startVodafoneConnection",
+        "description": "Session mode returns the normal My Vodafone login destination; it does not acquire a token. Optional registered-OAuth mode returns an authorization URL.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "stream"
+                ],
+                "properties": {
+                  "stream": {
+                    "$ref": "#/components/schemas/Stream"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "method": {
+                      "type": "string"
+                    },
+                    "loginUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "handoff": {
+                      "const": "browser_session_bridge"
+                    },
+                    "stream": {
+                      "$ref": "#/components/schemas/Stream"
+                    },
+                    "authorizationUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "expiresIn": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/vodafone/session": {
+      "post": {
+        "operationId": "importMyVodafoneSession",
+        "description": "Hand off a user-authorized browser access token. The backend verifies account API access before encrypting it. Cookies and refresh tokens are rejected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "accessToken"
+                ],
+                "properties": {
+                  "source": {
+                    "const": "myvodafone-browser"
+                  },
+                  "accessToken": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 12000,
+                    "writeOnly": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/vodafone/verify-session": {
+      "post": {
+        "operationId": "verifyMyVodafoneSession",
+        "description": "Perform another Vodafone account read using the stored session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/vodafone/disconnect": {
+      "post": {
+        "operationId": "disconnectVodafone",
+        "description": "Delete the stored provider connection; cached usage remains local to its owner.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/vodafone/verify-refresh": {
+      "post": {
+        "operationId": "verifyRegisteredOAuthRefresh",
+        "description": "Registered-OAuth research only. Default session mode returns 409 browser_renewal_required and makes no refresh grant.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/vodafone/callback": {
+      "get": {
+        "operationId": "registeredOAuthCallback",
+        "description": "Registered-OAuth research only. Default session mode returns 409. State is single-use and bound to the initiating backend owner.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Generic connected HTML, with no credentials.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Callback rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usage/sync": {
+      "post": {
+        "operationId": "syncServiceUsage",
+        "description": "Fetch one service’s Vodafone history window and update the owner’s cache. Requests use inclusive dates; returned ranges have an exclusive end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Selection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sync"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usage/history": {
+      "get": {
+        "operationId": "getServiceHistory",
+        "description": "Read cached per-day byte sums and coverage. This route does not contact Vodafone.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Australian mobile service, 04… or 614…"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Inclusive. At most 91 dates, ending no later than today in Sydney."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/History"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usage/consumption": {
+      "get": {
+        "operationId": "getSharedConsumption",
+        "description": "Read shared buckets for a service. Deduplicate bucket ID plus cycle across service responses; never sum repeated shared allowances.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Australian mobile service, 04… or 614…"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consumption"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/services": {
+      "get": {
+        "operationId": "getVodafoneServices",
+        "description": "Discover mobile lines and plan labels from the observed Vodafone account asset schema. Account and billing-account identifiers are omitted.",
+        "responses": {
+          "200": {
+            "description": "The owner’s Vodafone service roster.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRoster"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BackendSession": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "VodaLens backend/device credential, never a Vodafone access token. Current local proof uses the private generated development key."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Empty": {
+        "type": "object"
+      },
+      "Stream": {
+        "type": "string",
+        "enum": [
+          "edge",
+          "ios",
+          "android"
+        ]
+      },
+      "Selection": {
+        "type": "object",
+        "required": [
+          "service",
+          "start",
+          "end"
+        ],
+        "properties": {
+          "service": {
+            "type": "string",
+            "description": "Australian mobile service, 04… or 614…"
+          },
+          "start": {
+            "type": "string",
+            "format": "date"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "description": "Inclusive. At most 91 dates, ending no later than today in Sydney."
+          }
+        }
+      },
+      "Range": {
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "description": "Exclusive output boundary."
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": [
+          "provider",
+          "connected",
+          "proof",
+          "allGatesPassed"
+        ],
+        "properties": {
+          "provider": {
+            "const": "vodafone-au"
+          },
+          "method": {
+            "type": "string"
+          },
+          "registrationRequired": {
+            "type": "boolean"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "sign_in_required",
+              "reconnect_required",
+              "connected"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Epoch milliseconds, local expiry hint."
+          },
+          "automaticRefreshSupported": {
+            "type": "boolean"
+          },
+          "renewal": {
+            "type": "string"
+          },
+          "proof": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "consumerApiRead": {
+                "type": "boolean"
+              },
+              "sessionReplacementVerified": {
+                "type": "boolean"
+              },
+              "lastVerifiedAt": {
+                "type": "integer"
+              }
+            }
+          },
+          "allGatesPassed": {
+            "type": "boolean",
+            "description": "Session mode: a verified connection plus a verified replacement token; this does not establish standalone mobile login."
+          }
+        }
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Stream"
+            }
+          },
+          "apiVersion": {
+            "const": 1
+          },
+          "authMethod": {
+            "type": "string"
+          },
+          "registrationRequired": {
+            "type": "boolean"
+          },
+          "ownerModel": {
+            "const": "single-owner-development"
+          },
+          "providerTokensOnServerOnly": {
+            "const": true
+          },
+          "automaticProviderRefresh": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Sync": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "range": {
+            "$ref": "#/components/schemas/Range"
+          },
+          "fetchedAt": {
+            "type": "integer"
+          },
+          "recordCount": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "coverage": {
+            "enum": [
+              "partial",
+              "provider_date_window"
+            ]
+          },
+          "providerCompletenessVerified": {
+            "const": false
+          }
+        }
+      },
+      "History": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "range": {
+            "$ref": "#/components/schemas/Range"
+          },
+          "source": {
+            "const": "myvodafone-api-cache"
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "date",
+                "bytes",
+                "coverage"
+              ],
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "bytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "description": "Observed cached byte sum; null means unknown. A partial window can contain a subtotal."
+                },
+                "coverage": {
+                  "enum": [
+                    "fetched",
+                    "partial",
+                    "unknown"
+                  ]
+                }
+              }
+            }
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "fetchedAt": {
+                  "type": "integer"
+                },
+                "skipped": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "windowCoverageComplete": {
+            "type": "boolean",
+            "description": "All requested dates have a fetched window with no skipped records."
+          },
+          "providerCompletenessVerified": {
+            "const": false,
+            "description": "Pagination, retention and billing finality have not been verified."
+          }
+        }
+      },
+      "Consumption": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "source": {
+            "const": "myvodafone-api"
+          },
+          "fetchedAt": {
+            "type": "integer"
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "totalBytes": {
+                  "type": "integer"
+                },
+                "usedBytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "remainingBytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Exclusive billing-period end."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Service": {
+        "type": "object",
+        "required": [
+          "phone",
+          "planName",
+          "accountType",
+          "serviceType"
+        ],
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "Local Australian mobile service number (04…)."
+          },
+          "planName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "accountType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "serviceType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ServiceRoster": {
+        "type": "object",
+        "required": [
+          "services",
+          "skippedAssets",
+          "source",
+          "fetchedAt"
+        ],
+        "properties": {
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Service"
+            }
+          },
+          "skippedAssets": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Assets without an Australian mobile service number are excluded explicitly."
+          },
+          "source": {
+            "const": "myvodafone-api"
+          },
+          "fetchedAt": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

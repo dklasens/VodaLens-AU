@@ -1,0 +1,56 @@
+{
+  "source": "https://my.vodafone.com.au/main.418bb8ef5a62c0ad.js",
+  "sha256": "5ef22b82044d218e3e401cc7b19c50be6231a71d49a1bcc562db2f9c1ca1eb80",
+  "bytes": 6499064,
+  "publicClientId": "TE6munQ7o6txJRqZeSzLBzDECX1yVBJO",
+  "issuer": "https://authn.vodafone.com.au/",
+  "audience": "https://dsapi.vodafone.com.au",
+  "staticFacts": {
+    "refreshTokensEnabled": true,
+    "offlineAccessRequested": true,
+    "applicationReadsCachedRefreshToken": true,
+    "sdkRefreshGrantImplemented": true,
+    "getAccessTokenSilentlyUsed": true
+  },
+  "liveRefreshGrantObserved": true,
+  "backendRefreshVerified": true,
+  "credentialsIncluded": false,
+  "liveObservation": {
+    "source": "Edge DevTools Network; normal My Vodafone page activity",
+    "successfulTokenEndpointObserved": true,
+    "httpMethod": "POST",
+    "httpStatus": 200,
+    "grantType": "refresh_token",
+    "formFields": [
+      "client_id",
+      "grant_type",
+      "refresh_token",
+      "redirect_uri"
+    ],
+    "cookiesInRequest": false,
+    "authorizationHeaderInRequest": false,
+    "clientSecretInRequest": false,
+    "responseIncludesRefreshToken": true,
+    "refreshTokenComparedAndChanged": true,
+    "accessTokenLifetimeSeconds": 300,
+    "credentialValuesRecorded": false
+  },
+  "backendObservation": {
+    "source": "docs/evidence/renewal-backend-probe.json",
+    "tokenExchanges": 2,
+    "afterNaturalExpiry": true,
+    "accessTokenLifetimeSeconds": 300,
+    "refreshTokensRotated": true,
+    "verifiedAccountReads": 2,
+    "browserRequiredDuringRenewal": false,
+    "cookiesSent": false,
+    "clientSecretUsed": false,
+    "credentialValuesRecorded": false,
+    "productionAutomaticRenewalEnabled": false,
+    "limitations": [
+      "Same Mac and network as browser; remote hosting untested",
+      "Maximum and idle refresh-token lifetimes unknown",
+      "Standalone mobile sign-in and re-authentication unproven"
+    ]
+  }
+}

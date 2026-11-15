@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "VodaLens — My Vodafone session bridge",
+  "version": "0.1.0",
+  "description": "Connect your signed-in My Vodafone session to your local VodaLens backend.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA22MiycH7eSE8yr5KMp8NjHZ1ireTm1mRbsJgvR90O6B6tFwEF4fWkeEpSARZ6WGr1SC4NpFtJT54s4pifHY5wguUSmJj6EZdRDDr7+VEixRgFJbM1ZPXJ4uQwDxEK/rXFYUSftOIcKVsN8DW7pjvk1iMcSP7XKHc5hsFRmQz/StCAaC0uUy4dIGczHvHbctHgjdTIG/WCvmXkGy+mgZH5GL1/ZfesLSkLtV3VEcvcA242hYs9Aq6qKXPOGmUTz819+mR/FzqblOw4VRBYqmK1gcxLAAW5C8umbejUrWbkju4WC1QdQQW1iLIw+TBUZZ6yyDBiQrd/O3btZsE5a4+3wIDAQAB",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://my.vodafone.com.au/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Connect VodaLens",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://my.vodafone.com.au/*"
+      ],
+      "js": [
+        "page-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://my.vodafone.com.au/*"
+      ],
+      "js": [
+        "relay.js"
+      ],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' http://127.0.0.1:8766"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "name": "VodaLens",
+  "streams": [
+    {
+      "id": "edge",
+      "name": "Microsoft Edge addon",
+      "path": "apps/edge",
+      "status": "session_handoff_verified_dashboard_integration_next"
+    },
+    {
+      "id": "ios",
+      "name": "iOS app",
+      "path": "apps/ios",
+      "status": "deferred_until_edge_proof"
+    },
+    {
+      "id": "android",
+      "name": "Android app",
+      "path": "apps/android",
+      "status": "standalone_native_app_verified_on_pixel"
+    }
+  ],
+  "currentPhase": "android_standalone_app_delivered",
+  "nextPhase": "user_testing_and_longer_session_observation",
+  "authenticationEvidence": "docs/evidence/myvodafone-session.json",
+  "authentication": "myvodafone_browser_session",
+  "shared": {
+    "backend": "services/api",
+    "clientSdk": "packages/backend-client",
+    "providerAdapter": "packages/vodafone-client",
+    "domain": "packages/domain",
+    "infrastructure": "infra"
+  },
+  "gates": [
+    "A user-initiated My Vodafone session handoff reaches the unified backend",
+    "Its access token successfully reads the Vodafone consumer API",
+    "Expiry and a replacement browser session are verified without collecting passwords",
+    "The Edge addon proves the unified backend end to end",
+    "Android standalone mode selected explicitly by the user; native login, renewal and live data verified on the Pixel"
+  ],
+  "android": {
+    "mode": "standalone_on_device",
+    "minimumSdk": 36,
+    "targetSdk": 37,
+    "ui": "Kotlin / Jetpack Compose / Material 3 dynamic colours",
+    "authentication": "official_myvodafone_web_session_handoff_and_native_rotating_refresh",
+    "evidence": "docs/evidence/android-validation.json",
+    "artifact": "output/android/VodaLens-0.1.2-personal.apk"
+  }
+}

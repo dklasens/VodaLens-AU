@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+.data
+local-data
+output
+node_modules
+**/node_modules
+**/*.har
+**/*.sqlite*
+apps
+tests
+docs

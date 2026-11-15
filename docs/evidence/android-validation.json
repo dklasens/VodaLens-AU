@@ -1,0 +1,42 @@
+{
+  "state": "verified_on_device",
+  "privacy": "Public summary only. Account identifiers, usage amounts and record counts, balances, billing dates, precise test timestamps and personal build fingerprints have been removed.",
+  "version": "0.1.2",
+  "platform": {
+    "native": "Kotlin / Jetpack Compose / Material 3",
+    "minimumAndroidApi": 36,
+    "targetAndroidApi": 37,
+    "standalone": true,
+    "backendRequired": false
+  },
+  "validation": {
+    "nativeUnitTestsPassed": 22,
+    "nativeUnitTestsFailed": 0,
+    "androidLintErrors": 0,
+    "onDeviceEncryptedStorageCheck": "passed",
+    "foregroundRefreshAfterAccessExpiry": "passed",
+    "rotatedRefreshToken": "verified",
+    "accessTokenLifetimeSeconds": 300
+  },
+  "featuresVerified": [
+    "Shared-pool deduplication and per-service consumption",
+    "Daily charts and selected-day breakdown",
+    "Billing-cycle progress compared with consumption",
+    "Six previous usage cycles, subject to provider availability",
+    "Six months of issued bills, subject to provider availability",
+    "Current amount due separated from paid historical invoice totals",
+    "Unissued future bills labelled Not issued yet",
+    "Last-successful-refresh timestamps on Usage, daily usage and Bills",
+    "Material You with distinct service accents and semantic status colours",
+    "Official-site sign-in, native renewal and same-account cache retention"
+  ],
+  "storage": "Android Keystore AES-GCM; app-private backup-excluded storage",
+  "limits": [
+    "Refresh-token idle and maximum lifetime are unknown; multi-day inactivity remains unmeasured",
+    "Carrier pagination, retention and billing finality are not independently guaranteed",
+    "Precise startup timing was not measured",
+    "Device verification used a development-signed personal build; public release uses a separate signing certificate"
+  ],
+  "credentialsIncluded": false,
+  "personalAccountDataIncluded": false
+}

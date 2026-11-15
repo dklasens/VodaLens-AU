@@ -1,0 +1,33 @@
+{
+  "state": "complete",
+  "maxTokenRequests": 2,
+  "tokenRequestsStarted": 2,
+  "browserCredentialRetired": true,
+  "cookiesSent": false,
+  "clientSecretUsed": false,
+  "clientId": "TE6munQ7o6txJRqZeSzLBzDECX1yVBJO",
+  "tokenEndpoint": "https://authn.vodafone.com.au/oauth/token",
+  "credentialsIncluded": false,
+  "attempts": [
+    {
+      "index": 1,
+      "previousAccessTokenExpired": true,
+      "tokenHttpStatus": 200,
+      "expiresInSeconds": 300,
+      "refreshTokenReturned": true,
+      "refreshTokenRotated": true,
+      "consumerApiRead": true
+    },
+    {
+      "index": 2,
+      "previousAccessTokenExpired": true,
+      "tokenHttpStatus": 200,
+      "expiresInSeconds": 300,
+      "refreshTokenReturned": true,
+      "refreshTokenRotated": true,
+      "consumerApiRead": true
+    }
+  ],
+  "backendRenewalVerified": true,
+  "browserRequiredDuringRenewal": false
+}

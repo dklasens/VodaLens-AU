@@ -1,0 +1,9 @@
+{
+  "method": "myvodafone-session",
+  "tokenLifetimeSeconds": 299,
+  "naturalExpiryObserved": true,
+  "stateAfterExpiry": "reconnect_required",
+  "expiredSessionRejected": true,
+  "errorCode": "reconnect_required",
+  "credentialsIncluded": false
+}
