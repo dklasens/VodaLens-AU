@@ -21,3 +21,7 @@ VodaLens is an independent companion and has no registered Vodafone OAuth client
 Experimental browser-to-backend renewal research is disabled by default and requires deliberate local opt-in plus a separately armed, bounded experiment. Do not enable it without understanding the credential handling and applicable Vodafone service terms. Normal Android renewal remains part of its on-device connection.
 
 A rotating refresh exchange with an uncertain outcome is never replayed automatically. Reconnection can be required after a timeout, malformed success response or ambiguous server error. Rate limits are treated separately from invalid credentials. Local disconnect erases app data even if remote revocation cannot be confirmed.
+
+## Recent-app privacy
+
+Saved recent-app thumbnails are disabled. Android can still show the live activity during an Overview transition while it remains started. Normal account screenshots and screen recording remain available by design; the sign-in activity separately uses secure-window protection.

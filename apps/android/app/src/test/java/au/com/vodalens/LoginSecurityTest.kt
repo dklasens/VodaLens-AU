@@ -10,13 +10,26 @@ class LoginSecurityTest {
         listOf("http://my.vodafone.com.au", "https://my.vodafone.com.au.attacker.example", "https://my.vodafone.com.au@attacker.example", "https://attacker@my.vodafone.com.au", "https://my.vodafone.com.au:8443", "file:///login.html", "javascript:alert(1)", "about:blank", "not a url").forEach { assertFalse(it, LoginNavigationPolicy.allowedDocument(it)) }
         assertFalse(LoginNavigationPolicy.portal("https://authn.vodafone.com.au/login"))
     }
-    @Test fun interceptionRecognizesPostAndSubframeDocumentsButAllowsStaticGetResources() {
-        assertTrue(LoginNavigationPolicy.documentLike(true, "GET", emptyMap()))
-        assertTrue(LoginNavigationPolicy.documentLike(false, "POST", emptyMap()))
-        assertTrue(LoginNavigationPolicy.documentLike(false, "GET", mapOf("sec-fetch-dest" to "iframe")))
-        assertTrue(LoginNavigationPolicy.documentLike(false, "GET", mapOf("Accept" to "text/html,application/xhtml+xml")))
-        assertFalse(LoginNavigationPolicy.documentLike(false, "GET", mapOf("Accept" to "text/css", "Sec-Fetch-Dest" to "style")))
-        assertFalse(LoginNavigationPolicy.documentLike(false, "GET", mapOf("Accept" to "*/*", "Sec-Fetch-Dest" to "script")))
+    @Test fun mainFrameAndDocumentMetadataTakePrecedenceOverResourceHints() {
+        assertTrue(LoginNavigationPolicy.documentLike(true, emptyMap()))
+        assertTrue(LoginNavigationPolicy.documentLike(true, mapOf("Accept" to "application/json", "Sec-Fetch-Dest" to "empty")))
+        assertTrue(LoginNavigationPolicy.documentLike(false, mapOf("sec-fetch-dest" to "iframe", "Accept" to "application/json")))
+        assertTrue(LoginNavigationPolicy.documentLike(false, mapOf("Sec-Fetch-Mode" to "navigate", "Sec-Fetch-Dest" to "empty", "Accept" to "application/json")))
+        assertTrue(LoginNavigationPolicy.documentLike(false, mapOf("Sec-Fetch-Dest" to "object")))
+    }
+    @Test fun metadataFreeHtmlFormDocumentsRemainRestricted() {
+        assertTrue(LoginNavigationPolicy.documentLike(false, mapOf("Accept" to "text/html,application/xhtml+xml")))
+        assertTrue(LoginNavigationPolicy.documentLike(false, mapOf("accept" to "application/xhtml+xml;q=0.9,*/*;q=0.8")))
+    }
+    @Test fun fetchXhrAndStaticResourcesDoNotBecomeDocuments() {
+        // Applies equally to GET and POST: method is deliberately not a classifier input.
+        assertFalse(LoginNavigationPolicy.documentLike(false, mapOf("Accept" to "application/json")))
+        assertFalse(LoginNavigationPolicy.documentLike(false, mapOf("Content-Type" to "application/problem+json; charset=utf-8")))
+        assertFalse(LoginNavigationPolicy.documentLike(false, mapOf("Accept" to "text/html", "Sec-Fetch-Dest" to "empty")))
+        assertFalse(LoginNavigationPolicy.documentLike(false, mapOf("Accept" to "text/html", "Sec-Fetch-Mode" to "cors")))
+        assertFalse(LoginNavigationPolicy.documentLike(false, mapOf("Accept" to "text/css", "Sec-Fetch-Dest" to "style")))
+        assertFalse(LoginNavigationPolicy.documentLike(false, mapOf("Accept" to "*/*", "Sec-Fetch-Dest" to "script")))
+        assertFalse(LoginNavigationPolicy.documentLike(false, emptyMap()))
     }
     @Test fun storageCompletionFromNavigatedPageCannotCommit() {
         val gate = LoginHandoffGate()

@@ -111,7 +111,7 @@ class VodafoneLoginActivity : ComponentActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 // shouldOverrideUrlLoading does not see form POSTs. Interception runs on a
                 // worker thread; UI changes must be posted, and response bodies stay unread.
-                if(!LoginNavigationPolicy.allowedDocument(request.url.toString()) && LoginNavigationPolicy.documentLike(request.isForMainFrame, request.method, request.requestHeaders)) {
+                if(!LoginNavigationPolicy.allowedDocument(request.url.toString()) && LoginNavigationPolicy.documentLike(request.isForMainFrame, request.requestHeaders)) {
                     if(request.isForMainFrame) view.post { rejectNavigation(view) }
                     return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked navigation", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
                 }

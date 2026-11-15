@@ -19,6 +19,7 @@ function ui(name) {
   const before = ui('vodalens-foreground-before');
   if(!before.includes('content-desc="Refresh Vodafone data"')) throw new Error('Wait for the app to finish syncing before this check.');
   const beforeTime = [...before.matchAll(/text="(Last refreshed[^\"]*)"/g)].map(m=>m[1]);
+  const beforeEvents = new Set(adb(['logcat','-d','-s','VodaLensSession:W','*:S']).split('\n'));
   const pid = adb(['shell','pidof','au.com.vodalens']).trim();
   const startedAt = Date.now();
   const dueAt = startedAt + 330000;
@@ -38,7 +39,7 @@ function ui(name) {
   }
   const afterTime = [...after.matchAll(/text="(Last refreshed[^\"]*)"/g)].map(m=>m[1]);
   const logs = adb(['logcat','-d','-s','VodaLensSession:W','*:S']);
-  const events = logs.split('\n').filter(line=>line.includes('VodaLensSession') && (line.includes('Renewal accepted:') || line.includes('Renewal rejected:'))).map(line=>({time:line.slice(0,18).trim(),accepted:line.includes('Renewal accepted:'),previousExpired:line.includes('previousExpired=true'),rotated:line.includes('rotated=true'),lifetimeSeconds:line.match(/lifetimeSeconds=(\d+)/)?.[1] ? Number(line.match(/lifetimeSeconds=(\d+)/)[1]) : null, httpStatus:line.match(/http=(\d+)/)?.[1] ? Number(line.match(/http=(\d+)/)[1]) : null,code:line.match(/code=([a-z_]+)/)?.[1] || null,category:line.match(/category=([a-z_]+)/)?.[1] || null}));
+  const events = logs.split('\n').filter(line=>!beforeEvents.has(line) && line.includes('VodaLensSession') && (line.includes('Renewal accepted:') || line.includes('Renewal rejected:'))).map(line=>({time:line.slice(0,18).trim(),accepted:line.includes('Renewal accepted:'),previousExpired:line.includes('previousExpired=true'),rotated:line.includes('rotated=true'),lifetimeSeconds:line.match(/lifetimeSeconds=(\d+)/)?.[1] ? Number(line.match(/lifetimeSeconds=(\d+)/)[1]) : null, httpStatus:line.match(/http=(\d+)/)?.[1] ? Number(line.match(/http=(\d+)/)[1]) : null,code:line.match(/code=([a-z_]+)/)?.[1] || null,category:line.match(/category=([a-z_]+)/)?.[1] || null}));
   const result = {state:'complete',startedAt:new Date(startedAt).toISOString(),resumedAt:new Date(dueAt).toISOString(),finishedAt:new Date().toISOString(),backgroundSeconds:330,sameProcess:pid===pidBeforeResume,wasBackground,beforeRefreshLabels:beforeTime,afterRefreshLabels:afterTime,timestampAdvanced:afterTime.length>0 && JSON.stringify(afterTime)!==JSON.stringify(beforeTime),noReconnect:!after.includes('text="Reconnect"'),idleAfterSync:after.includes('content-desc="Refresh Vodafone data"'),sessionEvents:events,credentialsIncluded:false};
   result.passed = result.sameProcess && result.wasBackground && result.timestampAdvanced && result.noReconnect && result.idleAfterSync && events.some(e=>e.accepted && e.previousExpired && e.rotated);
   fs.writeFileSync(`${root}/local-data/android-foreground-verification.json`,JSON.stringify(result,null,2)+'\n');

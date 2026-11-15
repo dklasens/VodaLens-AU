@@ -10,9 +10,25 @@ internal object LoginNavigationPolicy {
         uri.scheme.equals("https", true) && uri.host?.lowercase() in hosts && uri.rawUserInfo == null && uri.port in setOf(-1, 443)
     }.getOrDefault(false)
     fun portal(url: String): Boolean = allowedDocument(url) && runCatching { URI(url).host.equals("my.vodafone.com.au", true) }.getOrDefault(false)
-    fun documentLike(mainFrame: Boolean, method: String, headers: Map<String, String>): Boolean {
-        fun header(name: String) = headers.entries.firstOrNull { it.key.equals(name, true) }?.value.orEmpty().lowercase()
-        return mainFrame || method.uppercase() !in setOf("GET", "HEAD") || header("Sec-Fetch-Dest") in setOf("document", "iframe", "frame") || "text/html" in header("Accept") || "application/xhtml+xml" in header("Accept")
+    /**
+     * Recognise document navigation without treating API/XHR POSTs as documents.
+     * WebResourceRequest cannot authoritatively distinguish every subframe from
+     * every resource, and Fetch Metadata may be absent. This is a navigation
+     * defence alongside URL callbacks and the form guard, not a WebView firewall.
+     */
+    fun documentLike(mainFrame: Boolean, headers: Map<String, String>): Boolean {
+        fun header(name: String) = headers.entries.firstOrNull { it.key.equals(name, true) }?.value.orEmpty().trim().lowercase()
+        if(mainFrame) return true
+        val destination = header("Sec-Fetch-Dest")
+        val mode = header("Sec-Fetch-Mode")
+        if(destination in setOf("document", "iframe", "frame", "fencedframe", "object", "embed") || mode == "navigate") return true
+        if(destination in setOf("empty", "audio", "audioworklet", "font", "image", "json", "manifest", "paintworklet", "report", "script", "serviceworker", "sharedworker", "style", "track", "video", "worker", "xslt") || mode in setOf("cors", "same-origin", "no-cors", "websocket")) return false
+        val acceptedTypes = header("Accept").split(',').map { it.substringBefore(';').trim() }
+        if(acceptedTypes.any { it in setOf("text/html", "application/xhtml+xml") }) return true
+        if(acceptedTypes.any { it == "application/json" || it.endsWith("+json") } || header("Content-Type").substringBefore(';').trim().let { it == "application/json" || it.endsWith("+json") }) return false
+        // HTTP method alone cannot tell a form submission from fetch(), XHR or
+        // telemetry. Leave unknown resources alone; native/page form guards remain.
+        return false
     }
 }
 
