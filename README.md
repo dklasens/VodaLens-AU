@@ -1,5 +1,9 @@
 # VodaLens AU
 
+<img width="1344" height="2992" alt="3" src="https://github.com/user-attachments/assets/7419ba24-4520-4926-9717-caa2b809816c" />
+<img width="1344" height="2992" alt="2" src="https://github.com/user-attachments/assets/9bfbce0c-c50e-47d8-b238-24aaadd523b1" />
+<img width="1344" height="2992" alt="1" src="https://github.com/user-attachments/assets/803c839d-cd16-4c9a-9aa6-b5b7248f324d" />
+
 A clearer view of your Vodafone Australia data and bills, right on your Android phone.
 
 VodaLens helps answer everyday questions: **How much data is left? Which service used it? Am I on track for the month?** It is an independent companion app, not an official Vodafone product.
